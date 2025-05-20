@@ -1,29 +1,50 @@
 {
   "expo": {
-    "name": "expo-user-management",
-    "slug": "expo-user-management",
+    "name": "SHELFLINK",
+    "slug": "SHELFLINK",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/splash-image.png",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "scheme": "shelflink",
+   
     "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
+      "image": "./assets/splash-image.png",
+      "resizeMode": "cover",
       "backgroundColor": "#ffffff"
+      
     },
+    "jsEngine": "hermes",
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "package": "com.bgsc.stori",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/splash-image.png",
+        "backgroundColor": "#00162e"
       },
       "edgeToEdgeEnabled": true
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-dev-client",
+        {
+          "launchMode": "most-recent"
+        }
+      ],
+      "expo-localization"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "dc3d1010-16c0-4bca-a19d-afb1c53bf239"
+      }
     }
   }
 }
