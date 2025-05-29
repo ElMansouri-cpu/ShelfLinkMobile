@@ -1,19 +1,16 @@
 {
   "expo": {
     "name": "SHELFLINK",
-    "slug": "SHELFLINK",
+    "slug": "expo-user-management",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/splash-image.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
     "scheme": "shelflink",
-   
     "splash": {
       "image": "./assets/splash-image.png",
       "resizeMode": "cover",
-      "backgroundColor": "#ffffff"
-      
+      "backgroundColor": "#00162e"
     },
     "jsEngine": "hermes",
     "ios": {
@@ -25,7 +22,11 @@
         "foregroundImage": "./assets/splash-image.png",
         "backgroundColor": "#00162e"
       },
-      "edgeToEdgeEnabled": true
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAj7yzgov7S4jsm2BQMOE7ijdndjbdMzlk"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -39,12 +40,14 @@
           "launchMode": "most-recent"
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      "expo-router"
     ],
     "extra": {
       "eas": {
         "projectId": "dc3d1010-16c0-4bca-a19d-afb1c53bf239"
       }
-    }
+    },
+    "owner": "xghase147"
   }
 }

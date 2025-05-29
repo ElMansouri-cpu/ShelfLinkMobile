@@ -21,6 +21,7 @@ import Header from "../../components/Header"
 import { useTranslation } from "react-i18next"
 import "../../i18n"
 import { safePush } from "../../utils/navigation"
+import { useNotification } from "../../context/NotificationContext";
 
 interface OrderStatusProps {
   status: string;
@@ -330,12 +331,18 @@ const FilterTab = memo(({ label, isActive, onPress }: FilterTabProps) => (
 export default function OrdersScreen() {
   const { session } = useAuth()
   const { data: userOrders, isLoading, refetch } = useGetOrders(session?.user.id)
+  const { lastPayload } = useNotification();
+
   const [refreshing, setRefreshing] = useState(false)
   const [activeFilter, setActiveFilter] = useState("all")
   const scrollY = useRef(new Animated.Value(0)).current
   const router = useRouter()
   const { t } = useTranslation()
-
+  useEffect(() => {
+    if (lastPayload) {
+      refetch();
+    }
+  }, [lastPayload, refetch]);
   // Animation values
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 50],

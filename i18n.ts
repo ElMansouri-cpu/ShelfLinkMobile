@@ -11,11 +11,21 @@ export const resources = {
   en: { translation: en },
 } as const;
 
+// Get the device language or default to 'ar'
+const getDeviceLanguage = () => {
+  try {
+    return Localization?.locale?.split('-')[0] || 'ar';
+  } catch (error) {
+    console.warn('Error getting device language:', error);
+    return 'ar';
+  }
+};
+
 i18n
   .use(initReactI18next)
   .init({
     compatibilityJSON: 'v4',
-    lng: Localization?.locale?.split('-')[0], // e.g. 'en-US' -> 'en'
+    lng: getDeviceLanguage(),
     fallbackLng: 'ar',
     resources,
     interpolation: {
