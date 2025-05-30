@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "SHELFLINK",
-    "slug": "expo-user-management",
+    "slug": "SHELFLINK",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/splash-image.png",
@@ -45,8 +45,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "dc3d1010-16c0-4bca-a19d-afb1c53bf239"
-      }
+        "projectId": "2832a91b-ca80-4cc8-ade5-86cec171cdb4"
+      },
+      "router": {}
     },
     "owner": "xghase147"
   }
