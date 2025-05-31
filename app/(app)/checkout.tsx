@@ -16,7 +16,7 @@ import { useCart } from '../../context/CartContext'
 import { useAuth } from '../../context/AuthContext'
 import { Feather } from '@expo/vector-icons'
 import { useRouter, useLocalSearchParams } from 'expo-router'
-import MapView, { Marker, Region } from 'react-native-maps'
+import MapView, { Marker, Region, UrlTile } from 'react-native-maps'
 import * as Location from 'expo-location'
 import Pin from '../../assets/pin.svg'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -147,6 +147,11 @@ export default function CheckoutScreen() {
                     rotateEnabled={false}
                     maxZoomLevel={20}
                   >
+                      <UrlTile
+    urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    maximumZ={19}
+    flipY={false}
+  />
                     <Marker coordinate={mapRegion} title="Delivery Location" description={address} />
                   </MapView>
                 </TouchableOpacity>
@@ -258,7 +263,13 @@ export default function CheckoutScreen() {
                 // Store changes temporarily without updating the main map yet
                 setTempModalRegion(region)
               }}
-            />
+            >
+            <UrlTile
+    urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    maximumZ={19}
+    flipY={false}
+  />
+            </MapView>
             {/* Center pin */}
             <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: '45%', alignItems: 'center' }}>
               <Pin width={48} height={48} />

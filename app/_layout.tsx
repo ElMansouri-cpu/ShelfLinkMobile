@@ -4,12 +4,17 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { AuthProvider } from '../context/AuthContext'
 import { CartProvider } from '../context/CartContext'
+import { NotificationProvider } from '../context/NotificationContext'
 import { setAuthToken } from '../lib/api'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useColorScheme, AppState } from "react-native"
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import * as SplashScreen from 'expo-splash-screen';
-
+import 'expo-dev-client';
+import '../i18n' // Import i18n configuration
+import { I18nextProvider } from 'react-i18next'
+import i18n from '../i18n'
+import Toast from 'react-native-toast-message';
 
 import React from 'react'
 
@@ -108,7 +113,12 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <CartProvider>
-            <RootLayoutNav />
+            <NotificationProvider storeId="your-store-id">
+              <I18nextProvider i18n={i18n}>
+                <RootLayoutNav />
+                <Toast />
+              </I18nextProvider>
+            </NotificationProvider>
           </CartProvider>
         </AuthProvider>
       </QueryClientProvider>
