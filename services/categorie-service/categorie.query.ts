@@ -8,3 +8,11 @@ export const useGetAllCategories = (id: string) => {
     });
 }
 
+export const useGetBrandsByCategorie = (organizationId: string, categorieId: string, enabled: boolean = true) => {
+    return useQuery({
+        queryKey: ['brands', organizationId, categorieId],
+        queryFn: () => categorieService.getBrandsByCategorie(organizationId, categorieId),
+        enabled: enabled,
+    });
+}
+

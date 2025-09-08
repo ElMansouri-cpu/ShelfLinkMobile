@@ -110,7 +110,7 @@ export default function Home() {
 
 
   const filteredStores = stores?.filter(store =>
-    store.name.toLowerCase().includes(searchQuery.toLowerCase())
+    store.organization.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const renderStoreCard = (store: any) => {
@@ -122,12 +122,12 @@ export default function Home() {
 
     return (
       <TouchableOpacity
-        key={store.id}
+        key={store.organization.id}
         className="mb-4 bg-white rounded-xl overflow-hidden shadow-sm"
-        onPress={() => safePush( {pathname: `/(app)/store/${store.id}`, params: { store: JSON.stringify(store) }})}
+        onPress={() => safePush( {pathname: `/(app)/store/${store.organization.id}`, params: { store: JSON.stringify(store) }})}
       >
         <Image
-          source={{ uri: 'https://glovo.dhmedia.io/image/stores-glovo/stores/d722bd537929fa107fa7136d72240634b89e484b423251a5319a3687680bf87e?t=W3siYXV0byI6eyJxIjoibG93In19LHsicmVzaXplIjp7ImhlaWdodCI6MjI1fX1d' }}
+          source={{ uri: store.organization.bannerUrl }}
           style={{ width: '100%', height: 160 }}
           resizeMode="cover"
         />
@@ -144,16 +144,16 @@ export default function Home() {
         <View className="p-3">
           <View className="flex-row items-center">
             <View className="w-10 h-10 bg-gray-200 rounded-full mr-3 items-center justify-center overflow-hidden">
-              {store.logo ? (
+              {store?.organization?.logoUrl ? (
                 <Image
-                  source={{ uri: store.logo }}
+                  source={{ uri: store.organization.logoUrl }}
                   style={{ width: '100%', height: '100%' }}
                 />
               ) : (
-                <Text className="font-bold">{store.name.charAt(0)}</Text>
+                <Text className="font-bold">{store.organization.name.charAt(0)}</Text>
               )}
             </View>
-            <Text className="text-lg font-bold">{store.name}</Text>
+            <Text className="text-lg font-bold">{store.organization.name}</Text>
           </View>
 
           <View className="flex-row items-center mt-2">

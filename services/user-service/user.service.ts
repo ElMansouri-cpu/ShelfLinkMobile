@@ -1,7 +1,9 @@
-import { User } from "./user.type"
+import { IUser } from "./user.type"
 import { supabase } from '../../lib/supabase'
 import { Alert } from "react-native"
-
+import { api } from "../../lib/api"
+import * as SecureStore from "expo-secure-store";
+import axios from "axios";
 
 
 export async function getProfile() {
@@ -68,7 +70,7 @@ export async function updateProfileEmail(email: string) {
   // Check if email already exists and is not the current user's
 }
 
-export async function updateProfile(Updates: Partial<User>) {
+export async function updateProfile(Updates: Partial<IUser>) {
   const { error } = await supabase.from('users').update(Updates).eq('id', Updates?.id)
   if (error) throw error
 
@@ -112,6 +114,26 @@ export async function insertPhone(phone: string) {
   else Alert.alert("Phone number inserted successfully")
 
 }
+
+export async function OTPAuthentication(phone: string) {
+  try {
+    const response = await api.post('/auth/retailer/signin/initiate', { phone })
+    return response.data
+  } catch (error) {
+    throw error
+  }
+}
+
+export async function OTPVerification(phone: string, code: string) {
+  try {
+    const response = await api.post('/auth/retailer/signin/verify', { phone, token: code })
+    return response.data
+  } catch (error) {
+
+    throw error
+  }
+}
+
 
 
 

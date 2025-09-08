@@ -14,7 +14,7 @@ const Header = ({ title, onBack, onSearch, scrollY, opacity, clearCart, onSave }
   const { t } = useTranslation();
 
   const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 50],
+    inputRange: [0, 20],
     outputRange: [0, 1],
     extrapolate: 'clamp'
   });

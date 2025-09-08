@@ -13,7 +13,12 @@ export default function AppLayout() {
             headerShown: false
           }}
         />
-
+        <Stack.Screen
+          name="invoice"
+          options={{
+            headerShown: false
+          }}
+        />
 
         <Stack.Screen
           name="onboarding/onboarding-stepper"
@@ -82,6 +87,13 @@ export default function AppLayout() {
         />
         <Stack.Screen
           name="store/[id]/categories/[categoryId]"
+          options={{
+            headerShown: false
+          }}
+        />
+
+        <Stack.Screen
+          name="search"
           options={{
             headerShown: false
           }}

@@ -22,24 +22,39 @@ import { useRouter } from "expo-router"
 import { useGetProfile } from "../../services/user-service/user.query"
 import { safePush } from '../../utils/navigation'
 import { useTranslation } from "react-i18next"
+import { useAuth } from '../../hooks/useAuth'
 
 export default function AccountScreen() {
   const { t } = useTranslation()
-  const { data: profile } = useGetProfile()
-  const [username, setUsername] = useState(profile?.username||"")
+  const { logout, user, loading: authLoading, isAuthenticated } = useAuth()
+  const [username, setUsername] = useState("")
   const router = useRouter()
+  
 
   useEffect(() => {
-    setUsername(profile?.username||"")
-  }, [profile])
+    if (user?.firstName) {
+      setUsername(user.firstName)
+    } else {
+      setUsername("User")
+    }
+  }, [user])
 
   async function handleSignOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      Alert.alert(error.message)
-    } else {
+    try {
+      await logout()
       router.replace('/(auth)/login')
+    } catch (error) {
+      console.error("Logout error:", error)
+      Alert.alert("Error", "Failed to logout")
     }
+  }
+
+  if (authLoading) {
+    return (
+      <SafeAreaView className="flex-1 bg-[#FFBA08] justify-center items-center">
+        <Text className="text-lg">Loading...</Text>
+      </SafeAreaView>
+    )
   }
 
   return (
@@ -65,9 +80,9 @@ export default function AccountScreen() {
       <View className="px-4 py-6">
         <View className="flex-row items-center">
           <View className="h-14 w-14 rounded-full bg-[#7DD3D8] justify-center items-center mr-3">
-            <Text className="text-white text-xl font-bold">{username.charAt(0).toUpperCase()}</Text>
+            <Text className="text-white text-xl font-bold">{username ? username.charAt(0).toUpperCase() : "U"}</Text>
           </View>        
-          <Text className="text-3xl font-bold text-black">{t("Hello")}, {username}.</Text>
+          <Text className="text-3xl font-bold text-black">{t("Hello")}, {username || "User"}.</Text>
         </View>
       </View>
 

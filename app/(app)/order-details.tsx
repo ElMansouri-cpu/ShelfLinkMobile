@@ -19,6 +19,7 @@ import { LinearGradient } from "expo-linear-gradient"
 import { useTranslation } from "react-i18next"
 import "../../i18n"
 import { safePush } from "../../utils/navigation"
+import { useFetchOrderDetails } from "../../services/order-service/orders.query"
 
 const { width } = Dimensions.get("window")
 const HEADER_HEIGHT = 220
@@ -124,6 +125,75 @@ const DeliveryStep = ({ type, address, isFirst, isLast }) => {
 // Order item component
 const OrderItem = ({ item, isLast }) => {
   const { t } = useTranslation()
+  
+  // Get status badge styling with cleaner colors
+  const getStatusBadgeStyle = (status) => {
+    switch (status) {
+      case 'pending_validation':
+        return { 
+          backgroundColor: '#fef3c7', 
+          color: '#d97706',
+          icon: 'clock'
+        }
+      case 'validated':
+        return { 
+          backgroundColor: '#dcfce7', 
+          color: '#16a34a',
+          icon: 'check-circle'
+        }
+      case 'quantity_updated':
+        return { 
+          backgroundColor: '#dbeafe', 
+          color: '#2563eb',
+          icon: 'edit-3'
+        }
+      case 'replaced':
+        return { 
+          backgroundColor: '#e0e7ff', 
+          color: '#7c3aed',
+          icon: 'refresh-cw'
+        }
+      case 'delivered':
+        return { 
+          backgroundColor: '#dcfce7', 
+          color: '#16a34a',
+          icon: 'truck'
+        }
+      case 'returned':
+        return { 
+          backgroundColor: '#fee2e2', 
+          color: '#dc2626',
+          icon: 'undo'
+        }
+      case 'refunded':
+        return { 
+          backgroundColor: '#fee2e2', 
+          color: '#dc2626',
+          icon: 'dollar-sign'
+        }
+      case 'cancelled':
+        return { 
+          backgroundColor: '#f3f4f6', 
+          color: '#6b7280',
+          icon: 'x-circle'
+        }
+      case 'shipped':
+        return { 
+          backgroundColor: '#dbeafe', 
+          color: '#2563eb',
+          icon: 'package'
+        }
+      default:
+        return { 
+          backgroundColor: '#f3f4f6', 
+          color: '#6b7280',
+          icon: 'help-circle'
+        }
+    }
+  }
+
+  const statusStyle = getStatusBadgeStyle(item.status)
+  
   return (
     <View style={[styles.orderItem, !isLast && styles.orderItemBorder]}>
       <View style={styles.orderItemQuantity}>
@@ -131,28 +201,141 @@ const OrderItem = ({ item, isLast }) => {
       </View>
 
       <View style={styles.orderItemDetails}>
-        <Text style={styles.itemName}>{item.variant.name}</Text>
-        {item.variant.description && (
-          <Text style={styles.itemDescription} numberOfLines={2}>
-            {item.variant.description}
-          </Text>
-        )}
+        <View style={styles.itemNameContainer}>
+          <Text style={styles.itemName}>{item.variant.name}</Text>
+          {item.variant.description && (
+            <Text style={styles.itemDescription} numberOfLines={1}>
+              {item.variant.description}
+            </Text>
+          )}
+        </View>
       </View>
 
-      <Text style={styles.itemPrice}>{parseFloat(item.totalAmount).toFixed(3)} {t("DT")}</Text>
+      <View style={styles.rightSection}>
+        <View style={[styles.statusBadge, { backgroundColor: statusStyle.backgroundColor }]}>
+          <Feather name={statusStyle.icon as any} size={10} color={statusStyle.color} style={{ marginRight: 3 }} />
+          <Text style={[styles.statusText, { color: statusStyle.color }]}>
+            {t(item.status.toUpperCase())}
+          </Text>
+        </View>
+        <Text style={styles.itemPrice}>{parseFloat(item.totalAmount).toFixed(3)} {t("DT")}</Text>
+      </View>
     </View>
   )
 }
 
 export default function OrderDetailsScreen() {
-  const { order: orderParam } = useLocalSearchParams()
+  const { order: orderParam, orderId, organizationId } = useLocalSearchParams()
   const router = useRouter()
   const { t } = useTranslation()
-  const orderDetails = JSON.parse(orderParam as string)
+  
+  // Extract order ID and organization ID
+  const extractedOrderId = orderId as string || (orderParam ? JSON.parse(orderParam as string)?.id : undefined)
+  const extractedOrgId = organizationId as string || (orderParam ? JSON.parse(orderParam as string)?.organizationId : undefined)
+
+  // Use the hook to fetch order details
+  const { data: orderDetails, isLoading, error, refetch } = useFetchOrderDetails(
+    extractedOrderId,
+    extractedOrgId
+  )
+
+  // Debug logging for order details
+  useEffect(() => {
+    console.log('OrderDetailsScreen - orderDetails updated:', {
+      extractedOrderId,
+      extractedOrgId,
+      id: orderDetails?.id,
+      status: orderDetails?.status,
+      organizationId: orderDetails?.organizationId,
+      isLoading,
+      error: error?.message
+    });
+  }, [orderDetails, isLoading, error, extractedOrderId, extractedOrgId]);
+  
   const [clientAddress, setClientAddress] = useState("Loading...")
   const [storeAddress, setStoreAddress] = useState("Loading...")
   const scrollY = useRef(new Animated.Value(0)).current
   const fadeAnim = useRef(new Animated.Value(0)).current
+
+  // All useEffect hooks must be called before any conditional returns
+  useEffect(() => {
+    // Fade in animation
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 400,
+      useNativeDriver: true,
+    }).start()
+
+    async function fetchAddress() {
+      try {
+        if (orderDetails?.latitude && orderDetails?.longitude) {
+          const addr = await getAddressFromCoords(orderDetails.latitude, orderDetails.longitude)
+          setClientAddress(addr)
+        } else {
+          setClientAddress("Address not available")
+        }
+      } catch (error) {
+        setClientAddress("Address not available")
+      }
+    }
+    async function fetchStoreAddress() {
+      try {
+        if (orderDetails?.organization?.location?.lat && orderDetails?.organization?.location?.lng) {
+          const addr = await getAddressFromCoords(orderDetails.organization?.location?.lat, orderDetails.organization?.location?.lng)
+          setStoreAddress(addr)
+        } else {
+          setStoreAddress("Store address not available")
+        }
+      } catch (error) {
+        setStoreAddress("Store address not available")
+      }
+    }
+
+    if (orderDetails) {
+      fetchAddress()
+      fetchStoreAddress()
+    }
+  }, [orderDetails?.latitude, orderDetails?.longitude, orderDetails?.organization?.location?.lat, orderDetails?.organization?.location?.lng])
+
+  // Missing parameters state
+  if (!extractedOrderId || !extractedOrgId) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 18, color: '#666' }}>Missing order information</Text>
+        <TouchableOpacity 
+          onPress={() => router.back()}
+          style={{ marginTop: 20, backgroundColor: '#10b981', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
+        >
+          <Text style={{ color: 'white', fontWeight: '600' }}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    )
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 18, color: '#666' }}>Loading order details...</Text>
+      </SafeAreaView>
+    )
+  }
+
+  // Error state
+  if (error || !orderDetails) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 18, color: '#666' }}>Order details not found</Text>
+        <Text style={{ fontSize: 14, color: '#999', marginTop: 8 }}>{error?.message}</Text>
+        <TouchableOpacity 
+          onPress={() => router.back()}
+          style={{ marginTop: 20, backgroundColor: '#10b981', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
+        >
+          <Text style={{ color: 'white', fontWeight: '600' }}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    )
+  }
   // Format date nicely
   const orderDate = new Date(orderDetails.createdAt)
   const formattedDate = orderDate.toLocaleDateString("en-US", {
@@ -167,26 +350,6 @@ export default function OrderDetailsScreen() {
     minute: "2-digit",
   })
 
-  useEffect(() => {
-    // Fade in animation
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 400,
-      useNativeDriver: true,
-    }).start()
-
-    async function fetchAddress() {
-      const addr = await getAddressFromCoords(orderDetails.latitude, orderDetails.longitude)
-      setClientAddress(addr)
-    }
-    async function fetchStoreAddress() {
-      const addr = await getAddressFromCoords(orderDetails.store.latitude, orderDetails.store.longitude)
-      setStoreAddress(addr)
-    }
-
-    fetchAddress()
-    fetchStoreAddress()
-  }, [orderDetails.latitude, orderDetails.longitude])
 
   // Calculate total items
   const totalItems = orderDetails.items.reduce((sum, item) => sum + item.quantity, 0)
@@ -249,11 +412,11 @@ export default function OrderDetailsScreen() {
           >
             <Image
               source={{
-                uri: orderDetails.store.image || "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
+                uri: orderDetails?.organization?.logoUrl || "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
               }}
               style={styles.headerImage}
-            />
-            <Text style={styles.headerTitle}>{orderDetails.store.name}</Text>
+            />  
+            <Text style={styles.headerTitle}>{orderDetails.organization?.name || "Store"}</Text>
             <StatusBadge status={orderDetails.status} />
           </Animated.View>
 
@@ -287,22 +450,37 @@ export default function OrderDetailsScreen() {
             <View style={styles.storeInfoContainer}>
               <Image
                 source={{
-                  uri: orderDetails.store.image || "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
+                  uri: orderDetails.organization?.logoUrl || "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
                 }}
                 style={styles.storeImage}
               />
               <View style={styles.storeInfo}>
-                <Text style={styles.storeName}>{orderDetails.store.name}</Text>
-                <TouchableOpacity
-                  style={styles.storeButton}
-                  onPress={() =>
-                      safePush( {pathname: `/(app)/store/${orderDetails.store.id}`, params: { store: JSON.stringify(orderDetails.store) }})
-                    }
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.storeButtonText}>{t("Visit store")}</Text>
-                  <Feather name="chevron-right" size={16} color="#059669" />
-                </TouchableOpacity>
+                <Text style={styles.storeName}>{orderDetails.organization?.name || "Store"}</Text>
+                <View style={styles.storeButtonsContainer}>
+                  <TouchableOpacity
+                    style={styles.storeButton}
+                    onPress={() =>
+                        safePush( {pathname: `/(app)/store/${orderDetails.organization?.id}`, params: { store: JSON.stringify(orderDetails.organization) }})
+                      }
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.storeButtonText}>{t("Visit store")}</Text>
+                    <Feather name="chevron-right" size={16} color="#059669" />
+                  </TouchableOpacity>
+                  
+                  {orderDetails.status === 'completed' && (
+                    <TouchableOpacity
+                      style={styles.invoiceButton}
+                      onPress={() =>
+                          safePush( {pathname: `/invoice`, params: { orderId: orderDetails.id, organizationId: orderDetails.organizationId }})
+                        }
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.invoiceButtonText}>{t("View Invoice")}</Text>
+                      <Feather name="file-text" size={16} color="#059669" />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             </View>
           </View>
@@ -319,9 +497,11 @@ export default function OrderDetailsScreen() {
               </View>
             </View>
 
-            {orderDetails.items.map((item: any, idx: number) => (
-              <OrderItem key={idx} item={item} isLast={idx === orderDetails.items.length - 1} />
-            ))}
+            <View style={styles.itemsListContainer}>
+              {orderDetails.items.map((item: any, idx: number) => (
+                <OrderItem key={idx} item={item} isLast={idx === orderDetails.items.length - 1} />
+              ))}
+            </View>
           </View>
 
           {/* Delivery Details Card */}
@@ -332,7 +512,7 @@ export default function OrderDetailsScreen() {
             </View>
 
             <View style={styles.deliveryStepsContainer}>
-              <DeliveryStep type="from" address={orderDetails.store.location.address} isFirst={true} isLast={false} />
+              <DeliveryStep type="from" address={orderDetails.organization?.location?.address || "Store address"} isFirst={true} isLast={false} />
 
               <DeliveryStep type="to" address={clientAddress} isFirst={false} isLast={true} />
             </View>
@@ -352,7 +532,7 @@ export default function OrderDetailsScreen() {
 
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>{t("Products")}</Text>
-              <Text style={styles.summaryValue}>{orderDetails && (orderDetails.totalAmount - (deliveryFee + serviceFee)).toFixed(3)} {t("DT")}</Text>
+              <Text style={styles.summaryValue}>{orderDetails && (Number(orderDetails.totalAmount) - (deliveryFee + serviceFee)).toFixed(3)} {t("DT")}</Text>
             </View>
 
             <View style={styles.summaryRow}>
@@ -398,7 +578,7 @@ export default function OrderDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#f1f5f9",
   },
   mainContainer: {
     flex: 1,
@@ -556,6 +736,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     color: "#111827",
   },
+  storeButtonsContainer: {
+    gap: 8,
+  },
   storeButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -566,46 +749,99 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginRight: 4,
   },
+  invoiceButton: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  invoiceButtonText: {
+    fontSize: 14,
+    color: "#f59e0b",
+    fontWeight: "600",
+    marginRight: 4,
+  },
   orderItem: {
     flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: "#fff",
+    marginHorizontal: 0,
+    marginVertical: 3,
+    borderRadius: 10,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 2,
   },
   orderItemBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    // Removed border, using card-style design instead
   },
   orderItemQuantity: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#ecfdf5",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#f0fdf4",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#dcfce7",
   },
   quantityText: {
-    fontWeight: "bold",
-    fontSize: 14,
+    fontWeight: "400",
+    fontSize: 12,
     color: "#059669",
   },
   orderItemDetails: {
     flex: 1,
-    paddingRight: 8,
+    paddingRight: 10,
+    justifyContent: "center",
+  },
+  itemNameContainer: {
+    flex: 1,
+    justifyContent: "center",
   },
   itemName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
-    marginBottom: 2,
     color: "#111827",
+    marginBottom: 2,
+  },
+  rightSection: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginBottom: 6,
+  },
+  statusText: {
+    fontSize: 9,
+    fontWeight: "600",
+    textTransform: "uppercase",
   },
   itemDescription: {
-    fontSize: 14,
+    fontSize: 11,
     color: "#6b7280",
+    lineHeight: 14,
   },
   itemPrice: {
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 12,
+    fontWeight: "600",
     color: "#111827",
+    textAlign: "center",
+  },
+  itemsListContainer: {
+    paddingVertical: 6,
+    paddingHorizontal: 0,
   },
   deliveryStepsContainer: {
     marginBottom: 16,
@@ -742,13 +978,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6b7280",
     fontWeight: "500",
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
   },
   statusBadgeText: {
     color: "white",

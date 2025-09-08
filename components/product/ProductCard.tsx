@@ -2,8 +2,10 @@ import React from 'react'
 import { useEffect, useRef } from "react"
 import { View, Text,  TouchableOpacity, Image, Dimensions, Animated } from "react-native"
 import { Feather } from "@expo/vector-icons"
+import { useTranslation } from 'react-i18next'
 
 const ProductCard = ({ product, onPress, onAddToCart, onRemoveFromCart, quantity, index }) => {
+    const { t } = useTranslation()
     const scale = useRef(new Animated.Value(1)).current
     const opacity = useRef(new Animated.Value(0)).current
     const translateY = useRef(new Animated.Value(20)).current
@@ -71,14 +73,44 @@ const ProductCard = ({ product, onPress, onAddToCart, onRemoveFromCart, quantity
           onPressOut={handlePressOut}
           style={{ flex: 1 }}
         >
+          {/* Promotional Badge */}
+          {product.isPromo && (
+            <View style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              backgroundColor: '#ef4444',
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 12,
+              zIndex: 1,
+            }}>
+              <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>
+                {t('SALE')}
+              </Text>
+            </View>
+          )}
           <View style={{ padding: 12, flex: 1 }}>
             <View style={{ height: 120, alignItems: "center", justifyContent: "center" }}>
-              <Image
-                source={{ uri: product.image }}
-                style={{ height: 100, width: 100 }}
-                resizeMode="contain"
-                resizeMethod="resize"
-              />
+              {product.mainImage || product.image ? (
+                <Image
+                  source={{ uri: product.mainImage || product.image }}
+                  style={{ height: 100, width: 100 }}
+                  resizeMode="contain"
+                  resizeMethod="resize"
+                />
+              ) : (
+                <View style={{ 
+                  height: 100, 
+                  width: 100, 
+                  backgroundColor: '#f3f4f6', 
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Feather name="image" size={32} color="#9ca3af" />
+                </View>
+              )}
             </View>
   
             <View style={{ flex: 1, justifyContent: "space-between" }}>
@@ -87,7 +119,22 @@ const ProductCard = ({ product, onPress, onAddToCart, onRemoveFromCart, quantity
               </Text>
   
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
-                <Text style={{ fontSize: 16, fontWeight: "bold", color: "#111" }}>{product.sellPriceTtc} DT</Text>
+                <View>
+                  {product.isPromo && product.promoPriceTtc ? (
+                    <>
+                      <Text style={{ fontSize: 14, fontWeight: "500", color: "#6b7280", textDecorationLine: 'line-through' }}>
+                        {product.sellPriceTtc} DT
+                      </Text>
+                      <Text style={{ fontSize: 16, fontWeight: "bold", color: "#ef4444" }}>
+                        {product.promoPriceTtc} DT
+                      </Text>
+                    </>
+                  ) : (
+                    <Text style={{ fontSize: 16, fontWeight: "bold", color: "#111" }}>
+                      {product.sellPriceTtc} DT
+                    </Text>
+                  )}
+                </View>
   
                 {quantity > 0 ? (
                   <View

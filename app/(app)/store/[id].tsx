@@ -158,7 +158,6 @@ export default function StoreScreen() {
   const formattedTotal = totalPrice.toFixed(3)
   const storeInfo = JSON.parse(store as string)
   const insets = useSafeAreaInsets()
-
   // Animation values
   const scrollY = new Animated.Value(0)
   const searchInputRef = useRef(null)
@@ -227,7 +226,7 @@ export default function StoreScreen() {
   }
   return (
     <>
-      <Header title={storeInfo?.name || "Store Name"} scrollY={scrollY}  />
+      <Header title={storeInfo?.organization?.name} scrollY={scrollY}  />
       <Animated.ScrollView
       ref={scrollRef}
         style={{ flex: 1, backgroundColor: "#f9fafb" }}
@@ -245,7 +244,7 @@ export default function StoreScreen() {
           }}
         >
           <Image
-            source={{ uri: storeInfo.image || "https://i.pinimg.com/474x/69/fd/05/69fd053b2e1a09ef8e62b7189233a888.jpg" }}
+            source={{ uri: storeInfo.organization.bannerUrl || "https://i.pinimg.com/474x/69/fd/05/69fd053b2e1a09ef8e62b7189233a888.jpg" }}
             style={{ width: "100%", height: "100%" }}
             resizeMode="cover"
             resizeMethod="resize"
@@ -282,7 +281,7 @@ export default function StoreScreen() {
               }}
             >
               <Text style={{ fontSize: 22, fontWeight: "bold", marginBottom: 8 }}>
-                {storeInfo?.name || "Store Name"}
+                {storeInfo?.organization?.name}
               </Text>
 
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
@@ -499,7 +498,8 @@ export default function StoreScreen() {
                     }
                   >
                     <Image
-                      source={{ uri: `${category.image}?width=128&height=128&quality=70` }}
+                      source={{ uri: `${category.imageUrl
+                      }?width=128&height=128&quality=70` }}
                       style={{
                         height: 50,
                         width: 50,

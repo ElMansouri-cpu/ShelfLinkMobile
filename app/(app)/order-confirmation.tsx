@@ -7,6 +7,7 @@ import { useCart } from "../../context/CartContext"
 import { api } from "../../lib/api"
 import { useTranslation } from "react-i18next"
 import "../../i18n"
+import { useAuth } from "../../hooks/useAuth"
 
 export default function OrderConfirmationScreen() {
   const router = useRouter()
@@ -30,6 +31,7 @@ export default function OrderConfirmationScreen() {
   const [orderPayload, setOrderPayload] = useState({})
   const [canCancel, setCanCancel] = useState(true)
   const [isConfirming, setIsConfirming] = useState(false)
+  const {user} = useAuth()
 
   const items = typeof itemsParam === "string" ? JSON.parse(itemsParam) : []
   const store = typeof storeParam === "string" ? JSON.parse(storeParam) : null
@@ -54,21 +56,21 @@ export default function OrderConfirmationScreen() {
     }).start()
 
     setOrderPayload({
-      storeId: store?.id,
-      userId: client?.id,
+      organizationId: store?.organization?.id,
+      retailerId: user?.id,
+      createdBy: user?.id,
       orderType: orderType,
       destination: address,
       latitude: Number.parseFloat(markerPosition?.latitude),
       longitude: Number.parseFloat(markerPosition?.longitude),
-      status: "pending",
       items: items.map((item) => ({
         variantId: item.id,
         quantity: item.quantity,
-        totalAmount: item.sellPriceTtc * item.quantity,
+        unitPrice: Number(item.sellPriceTtc),
       })),
-      totalAmount: total,
     })
-  }, [])
+  }, [user])
+
 
   useEffect(() => {
     // Progress bar animation
@@ -96,8 +98,7 @@ export default function OrderConfirmationScreen() {
           useNativeDriver: true,
         }),
       ]).start()
-
-      const response = await api.post(`/orders/store/${store?.id}`, orderPayload)
+      const response = await api.post(`/organization/${store?.organization?.id}/orders/`, orderPayload)
 
       // Success animation
       Animated.timing(fadeAnim, {
@@ -108,7 +109,8 @@ export default function OrderConfirmationScreen() {
         router.replace({
           pathname: "/(app)/order-details",
           params: {
-            order: JSON.stringify(response.data),
+            orderId: response.data.id,
+            organizationId: response.data.organizationId,
           },
         })
       })

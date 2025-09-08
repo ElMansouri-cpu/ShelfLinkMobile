@@ -1,9 +1,9 @@
     import { api } from "../../lib/api";
-import {Store} from "./store.types"
+import {IClientRelationship} from "./store.types"
 
 export const storeService = {
-    getAllStores: async (): Promise<Store[]> => {
-        const { data } = await api.get('/stores/all')
+    getAllStores: async (): Promise<IClientRelationship[]> => {
+        const { data } = await api.get('/users/client-relationships')
         return data
     }
 }

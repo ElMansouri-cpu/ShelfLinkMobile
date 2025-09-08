@@ -5,3 +5,9 @@ export interface Categorie {
     image: string;
 }
 
+export interface Brands {
+    id: string;
+    name: string;
+    description: string;
+    image: string;
+}

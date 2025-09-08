@@ -13,7 +13,6 @@ import {
   Dimensions
 } from 'react-native'
 import { supabase } from '../../lib/supabase'
-import { useAuth } from '../../context/AuthContext'
 import { useRouter } from 'expo-router'
 import Animated, {
   FadeInRight,
@@ -26,6 +25,10 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useTranslation } from 'react-i18next';
 import '../../i18n'; // make sure i18n is initialized
+import { useOTPAuthentication, useOTPVerification } from '../../services/user-service/user.query'
+import { setAuthToken } from '../../lib/api'
+import * as SecureStore from "expo-secure-store";
+import  {useAuth}  from '../../hooks/useAuth'
 
 AppState.addEventListener('change', (state) => {
   if (state === 'active') {
@@ -39,139 +42,169 @@ const { width } = Dimensions.get('window')
 
 export default function Login() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [isSignIn, setIsSignIn] = useState(true)
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [verificationCode, setVerificationCode] = useState('')
+  const [isCodeSent, setIsCodeSent] = useState(false)
   const [loading, setLoading] = useState(false)
-  const { setSession } = useAuth()
+  const [resendTimer, setResendTimer] = useState(0)
   const { t, i18n } = useTranslation();
-  const [emailError, setEmailError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [codeError, setCodeError] = useState('');
+  const { mutate: OTPAuthentication } = useOTPAuthentication()
+  const { mutate: OTPVerification } = useOTPVerification()
+  const {  setUser } = useAuth()
+
 
   // Height animation
   const collapsedHeight = 360
-  const expandedHeight = 520
-  const animatedHeight = useSharedValue(isSignIn ? collapsedHeight : expandedHeight)
+  const expandedHeight = 420
+  const animatedHeight = useSharedValue(isCodeSent ? expandedHeight : collapsedHeight)
 
   useEffect(() => {
-    animatedHeight.value = withTiming(isSignIn ? collapsedHeight : expandedHeight, { duration: 400 })
-    setEmailError('');
-    setPasswordError('');
-    setConfirmPasswordError('');
-    setEmail('');
-    setPassword('');
-    setConfirmPassword('');
-  }, [isSignIn])
+    animatedHeight.value = withTiming(isCodeSent ? expandedHeight : collapsedHeight, { duration: 400 })
+    if (isCodeSent) {
+      setResendTimer(60)
+      const interval = setInterval(() => {
+        setResendTimer((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+      return () => clearInterval(interval)
+    }
+  }, [isCodeSent])
 
   const animatedContainerStyle = useAnimatedStyle(() => ({
     height: animatedHeight.value
   }))
 
-  function validateEmail(email: string) {
-    return /\S+@\S+\.\S+/.test(email);
+  function validatePhoneNumber(phone: string) {
+    // Remove any non-digit characters
+    const cleanPhone = phone.replace(/\D/g, '')
+    // Check if it's a valid Tunisian phone number (8 digits starting with 2, 9, or 5)
+    return /^[259]\d{7}$/.test(cleanPhone)
   }
 
-  async function signInWithEmail() {
-    setEmailError('');
-    setPasswordError('');
+  function formatPhoneNumber(phone: string) {
+    // Remove any non-digit characters
+    const cleanPhone = phone.replace(/\D/g, '')
+    // Format as +216 XX XXX XXX
+    if (cleanPhone.length >= 8) {
+      return `+216 ${cleanPhone.substring(0, 2)} ${cleanPhone.substring(2, 5)} ${cleanPhone.substring(5, 8)}`
+    }
+    return phone
+  }
+
+  async function sendVerificationCode() {
+    setPhoneError('');
     let valid = true;
 
-    if (!validateEmail(email)) {
-      setEmailError(t('Invalid email address'));
+    if (!phoneNumber) {
+      setPhoneError(t('phoneNumberRequired'));
       valid = false;
-    }
-    if (!password) {
-      setPasswordError(t('Password is required'));
-      valid = false;
-    } else if (password.length < 6) {
-      setPasswordError(t('Password must be at least 8 characters long'));
+    } else if (!validatePhoneNumber(phoneNumber)) {
+      setPhoneError(t('invalidPhoneNumber'));
       valid = false;
     }
     if (!valid) return;
 
     setLoading(true)
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      Alert.alert(t('Sign in failed'))
-      setLoading(false)
-      return
-    }
-    setSession(data.session)
-    router.replace('/(app)/home')
-    setLoading(false)
-  }
-
-  async function signUpWithEmail() {
-    setEmailError('');
-    setPasswordError('');
-    setConfirmPasswordError('');
-    let valid = true;
-
-    if (!validateEmail(email)) {
-      setEmailError(t('Invalid email address'));
-      valid = false;
-    }
-    if (!password) {
-      setPasswordError(t('Password is required'));
-      valid = false;
-    } else if (password.length < 6) {
-      setPasswordError(t('Password must be at least 6 characters'));
-      valid = false;
-    }
-    if (password !== confirmPassword) {
-      setConfirmPasswordError(t('Passwords do not match'));
-      valid = false;
-    }
-    if (!valid) return;
-
-    setLoading(true)
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          role: 'client'
+    
+    try {
+             // Format phone number for Supabase (add +216 prefix if not present)
+               let formattedPhone = phoneNumber
+        if (!phoneNumber.startsWith('+216')) {
+          const cleanPhone = phoneNumber.replace(/\D/g, '')
+          formattedPhone = `216${cleanPhone}`
         }
-      }
-    })
-
-    if (error) {
-      Alert.alert(t(error.message))
+      OTPAuthentication(formattedPhone, {
+        onSuccess: (data) => {
+          setIsCodeSent(true)
+          setPhoneError('')
+          Alert.alert(t('Success'), t('codeSent', { phone: formatPhoneNumber(phoneNumber) }))
+          setLoading(false)
+        },
+        onError: (error) => {
+          console.error("OTP send failed:", error)
+          Alert.alert(t('Sign in failed'), error.message || 'Failed to send OTP')
+          setLoading(false)
+        }
+      })
+    } catch (error) {
+      Alert.alert(t('Sign in failed'), 'An unexpected error occurred')
       setLoading(false)
-      return
     }
+  }
 
-    if (session?.user) {
-      const {  error: userError } = await supabase
-        .from('users')
-        .insert([
-          {
-            id: session.user.id,
-            email: session.user.email,
-            role: 'client',
-          }
-        ])
+  async function verifyCode() {
+    setCodeError('');
+    let valid = true;
 
-      if (userError) {
-        Alert.alert(t('Error creating user profile'))
-        console.error(userError)
-      }
+    if (!verificationCode) {
+      setCodeError(t('codeRequired'));
+      valid = false;
+    } else if (verificationCode.length !== 6 || !/^\d{6}$/.test(verificationCode)) {
+      setCodeError(t('invalidCode'));
+      valid = false;
     }
+    if (!valid) return;
 
-    if (!session) {
-      Alert.alert(t('Please check your inbox for email verification!'));
-      setIsSignIn(true)
-    } else {
-      setSession(session)
-      setIsSignIn(true)
-      router.replace('/(app)/onboarding/onboarding-stepper')
+    setLoading(true)
+    
+    try {
+             // Format phone number for Supabase
+       let formattedPhone = phoneNumber
+       if (!phoneNumber.startsWith('+216')) {
+         const cleanPhone = phoneNumber.replace(/\D/g, '')
+         formattedPhone = `216${cleanPhone}`
+       }
+
+      OTPVerification({
+        phone: formattedPhone,
+        code: verificationCode,
+      }, {
+                 onSuccess: async(data) => {
+           setLoading(false)
+           // Handle successful verification here
+           if (data.accessToken) {
+             
+             await SecureStore.setItemAsync("accessToken", data?.accessToken);
+             await SecureStore.setItemAsync("refreshToken", data?.refreshToken);
+             await SecureStore.setItemAsync("user", JSON.stringify(data?.user));
+             
+             setAuthToken(data?.accessToken);
+             setUser(data?.user);
+             
+             // Store the token and redirect
+             router.replace('/(app)/home')
+           }
+         },
+        onError: (error) => {
+          console.error("OTP verification failed:", error)
+          Alert.alert(t('Sign in failed'), 'Verification failed')
+          setLoading(false)
+        }
+      })
+    } catch (error) {
+      Alert.alert(t('Sign in failed'), 'An unexpected error occurred')
     }
+    
     setLoading(false)
+  }
+
+  function resendCode() {
+    if (resendTimer > 0) return
+    sendVerificationCode()
+  }
+
+  function goBackToPhone() {
+    setIsCodeSent(false)
+    setVerificationCode('')
+    setCodeError('')
+    setResendTimer(0)
   }
 
   return (
@@ -179,11 +212,11 @@ export default function Login() {
       <StatusBar barStyle="default" />
       <ScrollView className="flex-1">
         {/* Header */}
-        <View className={`bg-[#00162e] ${isSignIn ? 'pb-16' : 'pb-8'} relative`}>
+        <View className={`bg-[#00162e] ${isCodeSent ? 'pb-8' : 'pb-16'} relative`}>
           <View className="items-center">
             <Image
-              source={require('../../assets/splash-image.png')}
-              style={{ width: width, height: isSignIn ? 240 : 200 }}
+              source={require('../../assets/logoShelf.png')}
+              style={{ width: width, height: isCodeSent ? 200 : 240 }}
               resizeMode="contain"
             />
           </View>
@@ -196,139 +229,93 @@ export default function Login() {
             { t('welcome') }
           </Text>
           <Text className="text-center text-gray-600 mb-6">
-            {isSignIn ? t('Sign-in-or-create-an-account') : t('Create-an-account')}
+            {isCodeSent ? t('verificationCode') : t('signInWithPhone')}
           </Text>
 
           <Animated.View
-            key={isSignIn ? 'signIn' : 'signUp'}
-            entering={isSignIn ? FadeInRight.duration(400) : FadeInLeft.duration(400)}
-            exiting={isSignIn ? FadeOutLeft.duration(400) : FadeOutRight.duration(400)}
+            key={isCodeSent ? 'verification' : 'phone'}
+            entering={isCodeSent ? FadeInRight.duration(400) : FadeInLeft.duration(400)}
+            exiting={isCodeSent ? FadeOutLeft.duration(400) : FadeOutRight.duration(400)}
           >
-            {isSignIn ? (
+            {!isCodeSent ? (
               <>
-                <View className="mb-4">
-                  <Text className="text-sm mb-1 text-gray-700">{t('email')}</Text>
+                <View className="mb-6">
+                  <Text className="text-sm mb-1 text-gray-700">{t('phoneNumber')}</Text>
                   <TextInput
                     className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                    placeholder={`email@address.com`}
+                    placeholder={t('phoneNumberPlaceholder')}
                     autoCapitalize="none"
-                    autoComplete="email"
-                    keyboardType="email-address"
-                    textContentType="emailAddress"
-                    value={email}
-                    onChangeText={setEmail}
+                    autoComplete="tel"
+                    keyboardType="phone-pad"
+                    textContentType="telephoneNumber"
+                    value={phoneNumber}
+                    onChangeText={setPhoneNumber}
+                    maxLength={15}
                   />
-                  {emailError ? <Text style={{ color: 'red', fontSize: 12 }}>{emailError}</Text> : null}
+                  {phoneError ? <Text style={{ color: 'red', fontSize: 12, marginTop: 4 }}>{phoneError}</Text> : null}
                 </View>
 
-                <View className="mb-6">
-                  <Text className="text-sm mb-1 text-gray-700">{t('password')}</Text>
-                  <TextInput
-                    className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                    placeholder={t('password')}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoComplete="password"
-                    textContentType="password"
-                    importantForAutofill="yes"
-                    value={password}
-                    onChangeText={setPassword}
-                  />
-                  {passwordError ? <Text style={{ color: 'red', fontSize: 12 }}>{passwordError}</Text> : null}
-                </View>
+                <Text className="text-center text-gray-500 mb-6 text-sm">
+                  {t('weWillSendCode')}
+                </Text>
 
                 <TouchableOpacity
                   disabled={loading}
-                  onPress={signInWithEmail}
+                  onPress={sendVerificationCode}
                   className={`bg-[#00162e] rounded-full py-3.5 items-center mb-4 ${loading ? 'opacity-50' : ''}`}
                 >
-                  <Text className="text-white font-medium text-base">{t('Sign-in')}</Text>
-                </TouchableOpacity>
-
-                <View className="flex-row items-center mb-6">
-                  <View className="flex-1 h-px bg-gray-300" />
-                  <Text className="px-4 text-gray-500 text-sm">{t('Or with')}</Text>
-                  <View className="flex-1 h-px bg-gray-300" />
-                </View>
-
-                <TouchableOpacity
-                  disabled={loading}
-                  onPress={() => setIsSignIn(false)}
-                  className={`flex-row items-center justify-center border border-gray-300 rounded-full py-3 mb-6 ${loading ? 'opacity-50' : ''}`}
-                >
-                  <Text className="font-medium text-base">{t('Sign-up')}</Text>
+                  <Text className="text-white font-medium text-base">{t('sendCode')}</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
                 <View className="mb-4">
-                  <Text className="text-sm mb-1 text-gray-700">{t('email')}</Text>
+                  <Text className="text-sm mb-1 text-gray-700">{t('verificationCode')}</Text>
                   <TextInput
-                    className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                    placeholder="email@address.com"
+                    className="border border-gray-300 rounded-lg px-4 py-3 text-base text-center text-lg"
+                    placeholder={t('codePlaceholder')}
                     autoCapitalize="none"
-                    autoComplete="email"
-                    keyboardType="email-address"
-                    textContentType="emailAddress"
-                    value={email}
-                    onChangeText={setEmail}
+                    autoComplete="one-time-code"
+                    keyboardType="number-pad"
+                    textContentType="oneTimeCode"
+                    value={verificationCode}
+                    onChangeText={setVerificationCode}
+                    maxLength={6}
                   />
-                  {emailError ? <Text style={{ color: 'red', fontSize: 12 }}>{emailError}</Text> : null}
+                  {codeError ? <Text style={{ color: 'red', fontSize: 12, marginTop: 4 }}>{codeError}</Text> : null}
                 </View>
 
-                <View className="mb-6">
-                  <Text className="text-sm mb-1 text-gray-700">{t('password')}</Text>
-                  <TextInput
-                    className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                    placeholder={t('password')}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoComplete="password"
-                    textContentType="password"
-                    importantForAutofill="yes"
-                    value={password}
-                    onChangeText={setPassword}
-                  />
-                  {passwordError ? <Text style={{ color: 'red', fontSize: 12 }}>{passwordError}</Text> : null}
-                </View>
-
-                <View className="mb-6">
-                  <Text className="text-sm mb-1 text-gray-700">{t('confirmPassword')}</Text>
-                  <TextInput
-                    className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                    placeholder={t('confirmPassword')}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoComplete="password"
-                    textContentType="password"
-                    importantForAutofill="yes"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                  />
-                  {confirmPasswordError ? <Text style={{ color: 'red', fontSize: 12 }}>{confirmPasswordError}</Text> : null}
-                </View>
+                <Text className="text-center text-gray-500 mb-6 text-sm">
+                  {t('enterCode')}
+                </Text>
 
                 <TouchableOpacity
                   disabled={loading}
-                  onPress={signUpWithEmail}
+                  onPress={verifyCode}
                   className={`bg-[#00162e] rounded-full py-3.5 items-center mb-4 ${loading ? 'opacity-50' : ''}`}
                 >
-                  <Text className="text-white font-medium text-base">{t('Sign-up')}</Text>
+                  <Text className="text-white font-medium text-base">{t('verifyCode')}</Text>
                 </TouchableOpacity>
 
-                <View className="flex-row items-center mb-6">
-                  <View className="flex-1 h-px bg-gray-300" />
-                  <Text className="px-4 text-gray-500 text-sm">{t('Do you have an account?')}</Text>
-                  <View className="flex-1 h-px bg-gray-300" />
+                <View className="flex-row items-center justify-between mb-6">
+                  <TouchableOpacity
+                    disabled={loading}
+                    onPress={goBackToPhone}
+                    className="flex-row items-center"
+                  >
+                    <Text className="text-[#00162e] font-medium text-base">← {t('Back')}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    disabled={loading || resendTimer > 0}
+                    onPress={resendCode}
+                    className={`flex-row items-center ${resendTimer > 0 ? 'opacity-50' : ''}`}
+                  >
+                    <Text className={`font-medium text-base ${resendTimer > 0 ? 'text-gray-400' : 'text-[#00162e]'}`}>
+                      {resendTimer > 0 ? `${t('resendCode')} (${resendTimer}s)` : t('resendCode')}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-
-                <TouchableOpacity
-                  disabled={loading}
-                  onPress={() => setIsSignIn(true)}
-                  className={`flex-row items-center justify-center border border-gray-300 rounded-full py-3 mb-6 ${loading ? 'opacity-50' : ''}`}
-                >
-                  <Text className="font-medium text-base">{t('Sign-in')}</Text>
-                </TouchableOpacity>
               </>
             )}
           </Animated.View>

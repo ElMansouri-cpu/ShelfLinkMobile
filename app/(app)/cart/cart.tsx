@@ -184,15 +184,15 @@ export default function CartScreen() {
         {/* Store Info */}
         <View style={styles.storeContainer}>
           <Image
-            source={{ uri: storeInfo.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?q=80" }}
+            source={{ uri: storeInfo.organization.logoUrl || "https://images.unsplash.com/photo-1542838132-92c53300491e?q=80" }}
             style={styles.storeImage}
           />
           <View style={{ flex: 1 }}>
-            <Text style={styles.storeName}>{storeInfo.name}</Text>
+            <Text style={styles.storeName}>{storeInfo.organization.name}</Text>
             <View style={styles.storeInfoRow}>
               <Feather name="map-pin" size={14} color="#6b7280" style={{ marginRight: 4 }} />
               <Text style={styles.storeInfoText} numberOfLines={1}>
-                {storeInfo.location?.address || "Store location"}
+                {storeInfo.organization.location?.address || "Store location"}
               </Text>
             </View>
           </View>

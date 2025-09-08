@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { getProfile, insertPhone, updatePassword, updatePhone, updateProfile, updateProfileEmail, } from "./user.service"
+import { getProfile, insertPhone, OTPAuthentication, OTPVerification, updatePassword, updatePhone, updateProfile, updateProfileEmail, } from "./user.service"
 
 export const useGetProfile = () => {
   return useQuery({ queryKey: ["profile"], queryFn: getProfile })
@@ -49,5 +49,15 @@ export const useInsertPhone = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile"] })
     }
+  })
+}
+
+export const useOTPAuthentication = () => {
+  return useMutation({ mutationFn: OTPAuthentication })
+}
+
+export const useOTPVerification = () => {
+  return useMutation({ 
+    mutationFn: ({ phone, code }: { phone: string; code: string }) => OTPVerification(phone, code) 
   })
 }

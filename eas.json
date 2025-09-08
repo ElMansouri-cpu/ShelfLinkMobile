@@ -18,7 +18,9 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://shelflink.store/api"
-
+      },
+      "android": {
+        "buildType": "app-bundle"
       }
     },
     "apk": {
