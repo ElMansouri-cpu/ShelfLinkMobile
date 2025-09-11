@@ -81,7 +81,7 @@ export default function CategoryScreen() {
     fetchNextPage,
     refetch,
   } = useGetProductsByCategorie(
-    storeInfo.organization.id, 
+    storeInfo?.organization?.id || storeInfo?.id, 
     activeTab || selectedCategoryInfo.id,
     !isPromotionsCategory // Only enable when not in promotions category
   )
@@ -92,7 +92,7 @@ export default function CategoryScreen() {
     isLoading: brandsLoading,
     refetch: refetchBrands,
   } = useGetBrandsByCategorie(
-    storeInfo.organization.id, 
+    storeInfo?.organization?.id || storeInfo?.id, 
     activeTab || selectedCategoryInfo.id,
     !isPromotionsCategory // Only enable when not in promotions category
   )
@@ -107,7 +107,7 @@ export default function CategoryScreen() {
     fetchNextPage: brandFetchNextPage,
     refetch: refetchBrandProducts,
   } = useGetProductsByBrandAndCategorie(
-    storeInfo.organization.id,
+    storeInfo?.organization?.id || storeInfo?.id,
     selectedBrand,
     activeTab || selectedCategoryInfo.id,
     !isPromotionsCategory // Only enable when not in promotions category
@@ -122,7 +122,7 @@ export default function CategoryScreen() {
     hasNextPage: promotionalHasNextPage,
     fetchNextPage: promotionalFetchNextPage,
     refetch: refetchPromotionalProducts,
-  } = useGetPromotionalProducts(storeInfo.organization.id)
+  } = useGetPromotionalProducts(storeInfo?.organization?.id || storeInfo?.id)
   
   // Flatten all products from all pages - prioritize promotions, then brand, then category
   const allProducts = isPromotionsCategory
@@ -218,11 +218,16 @@ export default function CategoryScreen() {
 
   // Cart management functions
   const handleAddToCart = (product) => {
+    // Determine the correct price - use promotional price if available
+    const price = product.isPromo && product.promoPriceTtc 
+      ? parseFloat(product.promoPriceTtc) 
+      : product.sellPriceTtc;
+    
     // Add to cart logic using cart context
     addToCart({
       id: product.id,
       name: product.name,
-      sellPriceTtc: product.sellPriceTtc,
+      sellPriceTtc: price,
       image: product.mainImage || product.image
     })
     // Optional: Show success feedback
@@ -247,17 +252,25 @@ export default function CategoryScreen() {
       <Header
          title={selectedBrandName ? `${activeCategoryName} - ${selectedBrandName}` : activeCategoryName}
         onBack={() => router.back()}
-        onSearch={() => router.push("/(app)/search")}
+        onSearch={() => router.push({
+          pathname: "/(app)/search",
+          params: {
+            store: JSON.stringify(storeInfo),
+            categories: categoriesParam,
+            selectedCategory: selectedCategory,
+          }
+        })}
         scrollY={scrollY}
+        opacity={1}
       />
 
-             <View style={{ flex: 1 }}>
-         {/* Search Input */}
-        <View
+      <View style={{ flex: 1, paddingTop: 56 }}>
+        {/* Search Input */}
+        {/* <View
           style={{
             paddingHorizontal: 16,
-             paddingTop: insets.top + 16,
-             paddingBottom: 12,
+            paddingTop: 16,
+            paddingBottom: 12,
             backgroundColor: "white",
           }}
         >
@@ -317,13 +330,13 @@ export default function CategoryScreen() {
             </TouchableOpacity>
 
            </View>
-         </View>
+         </View> */}
 
          {/* Header with Category Tabs */}
          <View
               style={{
              paddingHorizontal: 16,
-             paddingTop: 0,
+             paddingTop: 8,
              paddingBottom: 8,
              backgroundColor: "white",
            }}
@@ -685,7 +698,7 @@ export default function CategoryScreen() {
         product={selectedProduct}
         visible={modalVisible}
         onClose={handleCloseModal}
-        storeId={storeInfo.organization.id}
+        storeId={storeInfo?.organization?.id || storeInfo?.id}
       />
     </View>
   )

@@ -28,7 +28,8 @@ import '../../i18n'; // make sure i18n is initialized
 import { useOTPAuthentication, useOTPVerification } from '../../services/user-service/user.query'
 import { setAuthToken } from '../../lib/api'
 import * as SecureStore from "expo-secure-store";
-import  {useAuth}  from '../../hooks/useAuth'
+import { useAuth } from '../../hooks/useAuth'
+import { User } from '../../utils/auth'
 
 AppState.addEventListener('change', (state) => {
   if (state === 'active') {
@@ -42,6 +43,7 @@ const { width } = Dimensions.get('window')
 
 export default function Login() {
   const router = useRouter()
+  const { login } = useAuth()
   const [phoneNumber, setPhoneNumber] = useState('')
   const [verificationCode, setVerificationCode] = useState('')
   const [isCodeSent, setIsCodeSent] = useState(false)
@@ -52,7 +54,6 @@ export default function Login() {
   const [codeError, setCodeError] = useState('');
   const { mutate: OTPAuthentication } = useOTPAuthentication()
   const { mutate: OTPVerification } = useOTPVerification()
-  const {  setUser } = useAuth()
 
 
   // Height animation
@@ -169,17 +170,21 @@ export default function Login() {
                  onSuccess: async(data) => {
            setLoading(false)
            // Handle successful verification here
-           if (data.accessToken) {
-             
-             await SecureStore.setItemAsync("accessToken", data?.accessToken);
-             await SecureStore.setItemAsync("refreshToken", data?.refreshToken);
-             await SecureStore.setItemAsync("user", JSON.stringify(data?.user));
-             
-             setAuthToken(data?.accessToken);
-             setUser(data?.user);
-             
-             // Store the token and redirect
-             router.replace('/(app)/home')
+           if (data.accessToken && data.user) {
+             try {
+               // Use the new login method from AuthContext
+               await login(data.user as User, data.accessToken, data.refreshToken);
+               
+               // Redirect to home
+               router.replace('/(app)/home')
+             } catch (error) {
+               console.error("Login failed:", error);
+               Alert.alert(t('Sign in failed'), 'Failed to complete login');
+               setLoading(false);
+             }
+           } else {
+             Alert.alert(t('Sign in failed'), 'Invalid response from server');
+             setLoading(false);
            }
          },
         onError: (error) => {
@@ -272,7 +277,7 @@ export default function Login() {
                 <View className="mb-4">
                   <Text className="text-sm mb-1 text-gray-700">{t('verificationCode')}</Text>
                   <TextInput
-                    className="border border-gray-300 rounded-lg px-4 py-3 text-base text-center text-lg"
+                    className="border border-gray-300 rounded-lg px-4 py-3 text-center text-lg"
                     placeholder={t('codePlaceholder')}
                     autoCapitalize="none"
                     autoComplete="one-time-code"

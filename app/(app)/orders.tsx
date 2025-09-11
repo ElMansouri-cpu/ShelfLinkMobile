@@ -242,6 +242,16 @@ const OrderCard = memo<{
   onCancelOrder: (orderID: string, organizationId: string) => void;
 }>(({ order, index, onPress, onCancelOrder }) => {
   const { t } = useTranslation()
+  
+  // Debug organization data
+  console.log('OrderCard - Order data:', {
+    orderId: order.id,
+    organizationId: order.organizationId,
+    organization: order.organization,
+    organizationName: order.organization?.name,
+    organizationLogoUrl: order.organization?.logoUrl
+  })
+  
   // Format date function
   const formatDate = useCallback((dateString: string) => {
     const date = new Date(dateString)
@@ -280,11 +290,19 @@ const OrderCard = memo<{
         <View style={styles.cardHeader}>
           <View style={styles.storeContainer}>
             <Image
-              source={{ uri: order?.organization?.logoUrl || "https://images.unsplash.com/photo-1504674900247-0877df9cc836" }}
+              source={{ 
+                uri: order?.organization?.logoUrl || 
+                     order?.organization?.bannerUrl || 
+                     "https://images.unsplash.com/photo-1504674900247-0877df9cc836" 
+              }}
               style={styles.storeImage}
+              onError={() => console.log('Image failed to load for order:', order.id)}
             />
             <View>
-                <Text style={styles.storeName}>{order?.organization?.name || "Store"}</Text>
+              <Text style={styles.storeName}>
+                {order?.organization?.name || 
+                 (order?.organizationId ? `Store ${order.organizationId.slice(0, 8)}...` : "Store")}
+              </Text>
               <Text style={styles.orderDate}>{formatDate(new Date(order.createdAt).toISOString())}</Text>
             </View>
           </View>
@@ -369,6 +387,7 @@ export default function OrdersScreen() {
 
   // Debug logging for orders list
   useEffect(() => {
+    console.log('OrdersScreen - userOrders:', data)
     console.log('OrdersScreen - userOrders updated:', {
       userId: user?.id,
       ordersCount: userOrders?.length,
@@ -376,7 +395,14 @@ export default function OrdersScreen() {
       hasNextPage,
       isLoading,
       error: error?.message,
-      lastPayload: lastPayload?.new?.id
+      lastPayload: lastPayload?.new?.id,
+      firstOrder: userOrders?.[0] ? {
+        id: userOrders[0].id,
+        organizationId: userOrders[0].organizationId,
+        organization: userOrders[0].organization,
+        organizationName: userOrders[0].organization?.name,
+        organizationLogoUrl: userOrders[0].organization?.logoUrl
+      } : null
     });
   }, [userOrders, isLoading, error, lastPayload, user?.id, data?.pages.length, hasNextPage]);
 
@@ -436,7 +462,12 @@ export default function OrdersScreen() {
 
   const confirmCancelOrder = () => {
     if (orderToCancel) {
-      cancelOrder({ orderID: orderToCancel.id, organizationId: orderToCancel.organizationId })
+      cancelOrder({ orderID: orderToCancel.id, organizationId: orderToCancel.organizationId }, {
+        onSuccess: () => {
+          // Refetch the orders list after successful cancellation
+          refetch()
+        }
+      })
       setShowCancelModal(false)
       setOrderToCancel(null)
     }
@@ -485,7 +516,7 @@ export default function OrdersScreen() {
       {/* Animated Header */}
       <Animated.View style={[styles.header, { height: headerHeight }]}>
         {/* <LinearGradient colors={["#059669", "#10b981"]} style={StyleSheet.absoluteFillObject} /> */}
-        <Header title={t("My Orders")} opacity={1} onBack={() => safePush({pathname: `/(app)/account`})} onSearch={() => {}}  scrollY={scrollY}  />
+        <Header title={t("My Orders")} opacity={1} onBack={() => safePush({pathname: `/(app)/account`})}   scrollY={scrollY}  />
 
       </Animated.View>
 

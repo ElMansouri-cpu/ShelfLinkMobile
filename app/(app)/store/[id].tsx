@@ -156,7 +156,9 @@ export default function StoreScreen() {
 
   const totalPrice = getTotalPrice()
   const formattedTotal = totalPrice.toFixed(3)
-  const storeInfo = JSON.parse(store as string)
+  const storeInfo = store ? JSON.parse(store as string) : { organization: { id: id, name: "Store" } }
+  console.log('Store page - Store param:', store)
+  console.log('Store page - StoreInfo:', storeInfo)
   const insets = useSafeAreaInsets()
   // Animation values
   const scrollY = new Animated.Value(0)
@@ -209,7 +211,7 @@ export default function StoreScreen() {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "white" }}>
         <Feather name="alert-circle" size={60} color="#ef4444" style={{ marginBottom: 16 }} />
-        <Text style={{ color: "#ef4444", fontSize: 16, marginBottom: 24 }}>{categoriesError.message}</Text>
+        <Text style={{ color: "#ef4444", fontSize: 16, marginBottom: 24 }}>{categoriesError?.message || 'An error occurred'}</Text>
         <TouchableOpacity
           onPress={() => refetchCategories()}
           style={{
@@ -226,7 +228,7 @@ export default function StoreScreen() {
   }
   return (
     <>
-      <Header title={storeInfo?.organization?.name} scrollY={scrollY}  />
+      <Header title={storeInfo?.organization?.name || "Store"} scrollY={scrollY}  />
       <Animated.ScrollView
       ref={scrollRef}
         style={{ flex: 1, backgroundColor: "#f9fafb" }}
@@ -244,7 +246,7 @@ export default function StoreScreen() {
           }}
         >
           <Image
-            source={{ uri: storeInfo.organization.bannerUrl || "https://i.pinimg.com/474x/69/fd/05/69fd053b2e1a09ef8e62b7189233a888.jpg" }}
+            source={{ uri: storeInfo?.organization?.bannerUrl || "https://i.pinimg.com/474x/69/fd/05/69fd053b2e1a09ef8e62b7189233a888.jpg" }}
             style={{ width: "100%", height: "100%" }}
             resizeMode="cover"
             resizeMethod="resize"
@@ -281,7 +283,7 @@ export default function StoreScreen() {
               }}
             >
               <Text style={{ fontSize: 22, fontWeight: "bold", marginBottom: 8 }}>
-                {storeInfo?.organization?.name}
+                {storeInfo?.organization?.name || "Store"}
               </Text>
 
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
@@ -313,43 +315,46 @@ export default function StoreScreen() {
         {/* Search Bar (conditionally rendered) */}
         {showSearch && (
           <AnimatedPreset.View
-            style={{
-              padding: 16,
-              backgroundColor: "white",
-              borderBottomWidth: 1,
-              borderBottomColor: "#f3f4f6",
-            }}
             entering={FadeInDown.duration(300)}
             exiting={FadeOutUp.duration(300)}
           >
             <View
               style={{
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: "#f3f4f6",
-                borderRadius: 8,
-                paddingHorizontal: 12,
+                padding: 16,
+                backgroundColor: "white",
+                borderBottomWidth: 1,
+                borderBottomColor: "#f3f4f6",
               }}
             >
-              <Feather name="search" size={20} color="#9ca3af" />
-              <TextInput
-                ref={searchInputRef}
+              <View
                 style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  paddingHorizontal: 8,
-                  fontSize: 16,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "#f3f4f6",
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
                 }}
-                placeholder={t("Search categories...")}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCapitalize="none"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery("")}>
-                  <Feather name="x" size={20} color="#9ca3af" />
-                </TouchableOpacity>
-              )}
+              >
+                <Feather name="search" size={20} color="#9ca3af" />
+                <TextInput
+                  ref={searchInputRef}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    paddingHorizontal: 8,
+                    fontSize: 16,
+                  }}
+                  placeholder={t("Search categories...")}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery("")}>
+                    <Feather name="x" size={20} color="#9ca3af" />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </AnimatedPreset.View>
         )}
@@ -461,69 +466,70 @@ export default function StoreScreen() {
           >
             {filteredCategories?.map((category: any, index: number) => {
               return (
-                <AnimatedPreset.View
+                <View
                   key={category.id}
                   style={{
                     width: "25%",
                     paddingHorizontal: 4,
                     paddingBottom: 12,
-                    opacity: 1,
-                    transform: [{ translateY: 0 }],
                   }}
-                  entering={FadeInDown.delay(index * 30)
-                    .duration(250)
-                    .springify()}
                 >
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: "white",
-                      borderRadius: 12,
-                      padding: 12,
-                      alignItems: "center",
-                      shadowColor: "#000",
-                      shadowOffset: { width: 0, height: 1 },
-                      shadowOpacity: 0.05,
-                      shadowRadius: 3,
-                      elevation: 1,
-                      height: 100,
-                      justifyContent: "center",
-                    }}
-                    activeOpacity={0.7}
-                    onPress={() =>
-                      safePush( {pathname: `/store/${id}/categories/${category.id}`, params: {
-                        categories: JSON.stringify(categories),
-                        selectedCategory: JSON.stringify(category),
-                        store: JSON.stringify(storeInfo),
-                      }})
-                    }
+                  <AnimatedPreset.View
+                    entering={FadeInDown.delay(index * 30)
+                      .duration(250)
+                      .springify()}
                   >
-                    <Image
-                      source={{ uri: `${category.imageUrl
-                      }?width=128&height=128&quality=70` }}
+                    <TouchableOpacity
                       style={{
-                        height: 50,
-                        width: 50,
-                        borderRadius: 25,
-                        marginBottom: 8,
+                        backgroundColor: "white",
+                        borderRadius: 12,
+                        padding: 12,
+                        alignItems: "center",
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.05,
+                        shadowRadius: 3,
+                        elevation: 1,
+                        height: 100,
+                        justifyContent: "center",
                       }}
-                      resizeMethod="resize"
-                      onError={(e) => {
-                        console.warn("Image load failed:", category.image, e.nativeEvent.error)
-                      }}
-                    />
-                    <Text
-                      style={{
-                        fontWeight: "600",
-                        fontSize: 12,
-                        textAlign: "center",
-                        color: "#374151",
-                      }}
-                      numberOfLines={1}
+                      activeOpacity={0.7}
+                      onPress={() =>
+                        safePush( {pathname: `/store/${id}/categories/${category.id}`, params: {
+                          categories: JSON.stringify(categories),
+                          selectedCategory: JSON.stringify(category),
+                          store: JSON.stringify(storeInfo),
+                        }})
+                      }
                     >
-                      {category.name}
-                    </Text>
-                  </TouchableOpacity>
-                </AnimatedPreset.View>
+                      <Image
+                        source={{ uri: `${category.imageUrl
+                        }?width=128&height=128&quality=70` }}
+                        style={{
+                          height: 50,
+                          width: 50,
+                          borderRadius: 25,
+                          marginBottom: 8,
+                        }}
+                        resizeMethod="resize"
+                        onError={(e) => {
+                          console.warn("Image load failed:", category.image, e.nativeEvent.error)
+                        }}
+                      />
+                      <Text
+                        style={{
+                          fontWeight: "600",
+                          fontSize: 12,
+                          textAlign: "center",
+                          color: "#374151",
+                        }}
+                        numberOfLines={1}
+                      >
+                        {category.name}
+                      </Text>
+                    </TouchableOpacity>
+                  </AnimatedPreset.View>
+                </View>
               )
             })}
           </View>

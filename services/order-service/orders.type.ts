@@ -181,4 +181,5 @@ export interface OrderStatusHistory {
     changedAt: Date;
     changedBy?: string;
     reason?: string;
+    changedByUser?: IUser;
 }

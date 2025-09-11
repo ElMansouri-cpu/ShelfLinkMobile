@@ -82,6 +82,7 @@ export interface IStatusHistoryEntry {
   changedAt: string;
   reason: string;
   changedBy?: string;
+  changedByUser?: IUser;
 }
 
 // Payment Status History
@@ -91,6 +92,7 @@ export interface IPaymentStatusHistoryEntry {
   changedBy?: string;
   amount?: number;
   reason: string;
+  changedByUser?: IUser;
 }
 
 // Order Types

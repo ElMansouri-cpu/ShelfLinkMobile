@@ -111,14 +111,24 @@ const ProductDetailsModal = ({ product, visible, onClose, storeId }: ProductDeta
   if (!product) return null;
   
   // Product images (assuming product has multiple images)
-  const productImages = [product.image];
+  const productImages = [product.mainImage || product.image];
   if (product.images && Array.isArray(product.images)) {
     productImages.push(...product.images);
   }
   
   // Handle add to cart
   const handleAddToCart = () => {
-    addToCart(product);
+    // Determine the correct price - use promotional price if available
+    const price = product.isPromo && product.promoPriceTtc 
+      ? parseFloat(product.promoPriceTtc) 
+      : product.sellPriceTtc;
+    
+    addToCart({
+      id: product.id,
+      name: product.name,
+      sellPriceTtc: price,
+      image: product.mainImage || product.image
+    });
   };
   
   // Handle remove from cart
@@ -220,10 +230,14 @@ const ProductDetailsModal = ({ product, visible, onClose, storeId }: ProductDeta
             <Text style={styles.productName}>{product.name}</Text>
             
             <View style={styles.priceContainer}>
-              <Text style={styles.price}>{product.sellPriceTtc} {t("DT")}</Text>
-              
-              {product.originalPrice && (
-                <Text style={styles.originalPrice}>{product.originalPrice} {t("DT")}</Text>
+              {/* Display promotional price if available, otherwise regular price */}
+              {product.isPromo && product.promoPriceTtc ? (
+                <>
+                  <Text style={styles.price}>{product.promoPriceTtc} {t("DT")}</Text>
+                  <Text style={styles.originalPrice}>{product.sellPriceTtc} {t("DT")}</Text>
+                </>
+              ) : (
+                <Text style={styles.price}>{product.sellPriceTtc} {t("DT")}</Text>
               )}
             </View>
             

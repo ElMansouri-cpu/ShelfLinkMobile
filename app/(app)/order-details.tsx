@@ -248,7 +248,7 @@ export default function OrderDetailsScreen() {
       status: orderDetails?.status,
       organizationId: orderDetails?.organizationId,
       isLoading,
-      error: error?.message
+      error: error?.message || null
     });
   }, [orderDetails, isLoading, error, extractedOrderId, extractedOrgId]);
   
@@ -322,11 +322,11 @@ export default function OrderDetailsScreen() {
   }
 
   // Error state
-  if (error || !orderDetails) {
+  if (error || !orderDetails || isLoading === false && !orderDetails) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' }}>
         <Text style={{ fontSize: 18, color: '#666' }}>Order details not found</Text>
-        <Text style={{ fontSize: 14, color: '#999', marginTop: 8 }}>{error?.message}</Text>
+        <Text style={{ fontSize: 14, color: '#999', marginTop: 8 }}>{error?.message || 'An error occurred'}</Text>
         <TouchableOpacity 
           onPress={() => router.back()}
           style={{ marginTop: 20, backgroundColor: '#10b981', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
@@ -460,7 +460,15 @@ export default function OrderDetailsScreen() {
                   <TouchableOpacity
                     style={styles.storeButton}
                     onPress={() =>
-                        safePush( {pathname: `/(app)/store/${orderDetails.organization?.id}`, params: { store: JSON.stringify(orderDetails.organization) }})
+                        safePush( {pathname: `/(app)/store/${orderDetails.organizationId}`, params: { store: JSON.stringify({ 
+                          organization: {
+                            id: orderDetails.organizationId,
+                            name: orderDetails.organization?.name || "Store",
+                            bannerUrl: orderDetails.organization?.bannerUrl || null,
+                            logoUrl: orderDetails.organization?.logoUrl || null,
+                            address: orderDetails.organization?.address || null
+                          }
+                        }) }})
                       }
                     activeOpacity={0.7}
                   >
@@ -559,10 +567,10 @@ export default function OrderDetailsScreen() {
           </View>
 
           {/* Reorder Button */}
-          <TouchableOpacity style={styles.reorderButton} activeOpacity={0.8}>
+          {/* <TouchableOpacity style={styles.reorderButton} activeOpacity={0.8}>
             <Feather name="refresh-cw" size={20} color="#fff" style={{ marginRight: 8 }} />
             <Text style={styles.reorderButtonText}>{t("Reorder")}</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           {/* Support Button */}
           <TouchableOpacity style={styles.supportButton}>

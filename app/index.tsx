@@ -4,10 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import '../styles/global.css'
 
 export default function Index() {
-    
   const { user, isAuthenticated, loading } = useAuth();
-
-
 
   // Show loading while auth is initializing
   if (loading) {
@@ -15,7 +12,7 @@ export default function Index() {
   }
 
   // Redirect based on authentication status
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     return <Redirect href="/(auth)/login" />
   } else {
     return <Redirect href="/(app)/home" />

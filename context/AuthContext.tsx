@@ -1,39 +1,106 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react'
+import * as SecureStore from "expo-secure-store"
+import { setAuthToken } from "../lib/api"
+import { User, handleSuccessfulLogin, clearAuthData } from "../utils/auth"
 import React from 'react'
+
 type AuthContextType = {
-  session: Session | null
-  setSession: (session: Session | null) => void
+  user: User | null
+  setUser: (user: User | null) => void
   loading: boolean
+  isAuthenticated: boolean
+  logout: () => Promise<void>
+  login: (user: User, accessToken: string, refreshToken?: string) => Promise<void>
+  setAuthToken: (token: string | null) => void
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Restore tokens & fetch user on app start
   useEffect(() => {
-    const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setSession(session)
-      setLoading(false)
+    const initAuth = async () => {
+      try {
+        console.log("Initializing auth...")
+        
+        const token = await SecureStore.getItemAsync("accessToken")
+        const userStr = await SecureStore.getItemAsync("user")
+        
+        console.log("Token exists:", !!token)
+        console.log("User data exists:", !!userStr)
+        
+        if (token && userStr) {
+          try {
+            const userData = JSON.parse(userStr)
+            console.log("Restoring user:", userData.id)
+            setAuthToken(token)
+            setUser(userData)
+          } catch (err) {
+            console.error("Failed to parse user data:", err)
+            // Clear corrupted data
+            await SecureStore.deleteItemAsync("user")
+            await SecureStore.deleteItemAsync("accessToken")
+            setUser(null)
+            setAuthToken(null)
+          }
+        } else {
+          console.log("No token or user data found - user not authenticated")
+          setUser(null)
+          setAuthToken(null)
+        }
+      } catch (err) {
+        console.error("Failed to restore session:", err)
+        setUser(null)
+        setAuthToken(null)
+      } finally {
+        console.log("Auth initialization complete")
+        setLoading(false)
+      }
     }
 
-    init()
+    initAuth()
+  }, [])
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
-
-    return () => {
-      subscription.unsubscribe()
+  // Login method
+  const login = useCallback(async (userData: User, accessToken: string, refreshToken?: string) => {
+    try {
+      await handleSuccessfulLogin({ user: userData, accessToken, refreshToken })
+      setUser(userData)
+      console.log("Login successful, user set in context")
+    } catch (error) {
+      console.error("Failed to login:", error)
+      throw error
     }
   }, [])
 
+  // Logout method
+  const logout = useCallback(async () => {
+    console.log("Logging out...")
+    await clearAuthData()
+    setUser(null)
+    console.log("Logout complete")
+  }, [])
+
+  const setUserWithLogging = useCallback((userData: User | null) => {
+    console.log("Setting user:", userData)
+    setUser(userData)
+  }, [])
+
+  const value: AuthContextType = {
+    user,
+    setUser: setUserWithLogging,
+    loading,
+    isAuthenticated: !!user,
+    login,
+    logout,
+    setAuthToken,
+  }
+
   return (
-    <AuthContext.Provider value={{ session, setSession, loading }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

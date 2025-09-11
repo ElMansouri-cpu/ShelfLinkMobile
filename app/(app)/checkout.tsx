@@ -49,7 +49,7 @@ export default function CheckoutScreen() {
 
 
   const { items, getTotalPrice } = useCart()
-  const { session } = useAuth()
+  const { user } = useAuth()
   const router = useRouter()
   const { store: storeParam } = useLocalSearchParams()
   const store = storeParam ? JSON.parse(storeParam as string) : { name: "Store", address: "Store location" }
@@ -62,6 +62,7 @@ export default function CheckoutScreen() {
   const totalProducts = getTotalPrice()
   const total = totalProducts + (orderType === OrderType.DELIVERY ? deliveryFee : 0) + serviceFee
   const mapRef = useRef<Mapbox.MapView>(null)
+  const modalMapRef = useRef<Mapbox.MapView>(null)
   const [tempModalRegion, setTempModalRegion] = useState<[number, number] | null>(null)
   const [mapRegion, setMapRegion] = useState<[number, number]>([10.16579, 36.81897]) // [longitude, latitude]
   // Map marker state (Tunis coordinates as default)
@@ -70,30 +71,59 @@ export default function CheckoutScreen() {
   const { t } = useTranslation();
   const [mapModalVisible, setMapModalVisible] = useState(false)
   const [isMapReady, setIsMapReady] = useState(false)
+  const [isModalMapReady, setIsModalMapReady] = useState(false)
   const [mapKey, setMapKey] = useState(0) // Key to force remount when needed
   const [isMapboxInitialized, setIsMapboxInitialized] = useState(false)
   const [shouldRenderMap, setShouldRenderMap] = useState(false)
   const [mapEnabled, setMapEnabled] = useState(true) // Enable maps with safe rendering
+  const [mapError, setMapError] = useState<string | null>(null)
+  
+  // Retry map initialization
+  const retryMapInitialization = () => {
+    setMapError(null)
+    setIsMapReady(false)
+    setIsModalMapReady(false)
+    setMapKey(prev => prev + 1) // Force remount
+  }
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 50],
     outputRange: [1, 0.9],
     extrapolate: 'clamp'
   });
   useEffect(() => {
-    try {
-      const token = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || 'pk.eyJ1IjoieGdoYXNlMTQiLCJhIjoiY21mNDhxMXRxMDB3eTJrczRwZTR5dnlydSJ9.-iWoOkmS7QXZqhqwTMLAAA'
-      if (token) {
-        Mapbox.setAccessToken(token)
-        setIsMapboxInitialized(true)
-        // Delay map rendering to ensure token is fully processed
-        setTimeout(() => {
-          setShouldRenderMap(true)
-        }, 500)
-      } else {
-        console.error('Mapbox token not found')
+    let isMounted = true
+    
+    const initializeMapbox = async () => {
+      try {
+        const token = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || 'pk.eyJ1IjoieGdoYXNlMTQiLCJhIjoiY21mNDhxMXRxMDB3eTJrczRwZTR5dnlydSJ9.-iWoOkmS7QXZqhqwTMLAAA'
+        if (token && isMounted) {
+          Mapbox.setAccessToken(token)
+          setIsMapboxInitialized(true)
+          setMapError(null)
+          // Delay map rendering to ensure token is fully processed
+          setTimeout(() => {
+            if (isMounted) {
+              setShouldRenderMap(true)
+            }
+          }, 500)
+        } else {
+          if (isMounted) {
+            setMapError('Mapbox token not found')
+            console.error('Mapbox token not found')
+          }
+        }
+      } catch (error) {
+        if (isMounted) {
+          setMapError('Failed to initialize Mapbox')
+          console.error('Failed to initialize Mapbox token:', error)
+        }
       }
-    } catch (error) {
-      console.error('Failed to initialize Mapbox token:', error)
+    }
+
+    initializeMapbox()
+
+    return () => {
+      isMounted = false
     }
   }, [])
 
@@ -130,23 +160,18 @@ export default function CheckoutScreen() {
   // Cleanup effect to prevent memory leaks
   useEffect(() => {
     return () => {
-      // Clean up map reference when component unmounts
+      // Clean up map references when component unmounts
       if (mapRef.current) {
         mapRef.current = null
       }
+      if (modalMapRef.current) {
+        modalMapRef.current = null
+      }
+      setIsMapReady(false)
+      setIsModalMapReady(false)
     }
   }, [])
 
-  // Reset map state when order type changes
-  useEffect(() => {
-    if (orderType === OrderType.PICKUP) {
-      // Close modal if open when switching to pickup
-      setMapModalVisible(false)
-      setTempModalRegion(null)
-    }
-    // Force map remount when switching between delivery and pickup
-    setMapKey(prev => prev + 1)
-  }, [orderType])
 
   return (
     <View style={{ flex: 1, backgroundColor: 'white' }}>
@@ -162,19 +187,22 @@ export default function CheckoutScreen() {
         )}
         scrollEventThrottle={16}
 >
-        {orderType === OrderType.DELIVERY && (
-          <View style={{  marginBottom: 8, marginTop: 50 }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>{t("Delivery details")}</Text>
+        <View style={{  marginBottom: 8, marginTop: 50 }}>
+          <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>{t("Delivery details")}</Text>
             {/* MapView with marker and zoom controls */}
             <View style={{ height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12 }}>
-              {mapEnabled && mapRegion && isMapboxInitialized && shouldRenderMap ? (
+              {mapEnabled && mapRegion && isMapboxInitialized && shouldRenderMap && !mapError ? (
                 <TouchableOpacity 
                   onPress={() => setMapModalVisible(true)} 
                   style={{ width: '100%', height: '100%' }}
                 >
                   <Mapbox.MapView
                     key={`map-${mapKey}`}
-                    ref={mapRef}
+                    ref={(ref) => {
+                      if (ref) {
+                        mapRef.current = ref
+                      }
+                    }}
                     style={{ width: '100%', height: '100%' }}
                     styleURL={Mapbox.StyleURL.Street}
                     zoomEnabled={false}
@@ -182,11 +210,13 @@ export default function CheckoutScreen() {
                     pitchEnabled={false}
                     rotateEnabled={false}
                     onDidFinishLoadingMap={() => {
+                      console.log('Main map loaded successfully')
                       setIsMapReady(true)
                     }}
                     onDidFailLoadingMap={() => {
                       console.error('Main map failed to load')
                       setIsMapReady(false)
+                      setMapError('Map failed to load')
                     }}
                   >
                     <Mapbox.Camera
@@ -207,7 +237,13 @@ export default function CheckoutScreen() {
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity 
-                  onPress={() => setMapModalVisible(true)} 
+                  onPress={() => {
+                    if (mapError) {
+                      retryMapInitialization()
+                    } else {
+                      setMapModalVisible(true)
+                    }
+                  }} 
                   style={{ width: '100%', height: '100%', backgroundColor: '#f0fdf4', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#10b981', borderStyle: 'dashed' }}
                 >
                   <Feather name="map-pin" size={48} color="#10b981" style={{ marginBottom: 12 }} />
@@ -215,7 +251,8 @@ export default function CheckoutScreen() {
                     {address}
                   </Text>
                   <Text style={{ color: '#6b7280', fontSize: 14, marginTop: 4, textAlign: 'center' }}>
-                    {isMapboxInitialized && shouldRenderMap ? 'Loading map...' : 'Tap to change location'}
+                    {mapError ? t("Map error - tap to retry") : 
+                     isMapboxInitialized && shouldRenderMap ? t("Loading map...") : t("Tap to change location")}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -235,61 +272,8 @@ export default function CheckoutScreen() {
             </TouchableOpacity>
           
           </View>
-        )}
 
-        {/* Pickup details - Show if pickup is selected */}
-        {orderType === OrderType.PICKUP && (
-          <View style={{ paddingHorizontal: 20, marginBottom: 16, marginTop: 16 }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>Pickup details</Text>
-            <View style={{ backgroundColor: '#f0fdf4', borderRadius: 12, padding: 16, flexDirection: 'row', alignItems: 'center',overflow: 'hidden' }}>
-              <Feather name="map-pin" size={24} color="#10b981" style={{ marginRight: 12 }} />
-              <View>
-                <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{store.name || "Store"}</Text>
-                <Text style={{ color: '#4b5563' }} numberOfLines={1}>{store.location?.address || store.address || "Store location"}</Text>
-              </View>
-            </View>
-          </View>
-        )}
 
-        {/* Payment method */}
-        <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
-          {/* Order Type Selection */}
-          <View style={{ marginBottom: 8 }}>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TouchableOpacity 
-                style={[
-                  styles.orderTypeCard,
-                  orderType === OrderType.DELIVERY && styles.orderTypeCardSelected
-                ]}
-                onPress={() => setOrderType(OrderType.DELIVERY)}
-              >
-                <View style={styles.orderTypeIcon}>
-                  <Feather name="truck" size={24} color={orderType === OrderType.DELIVERY ? '#10b981' : '#10b981'} />
-                </View>
-                <Text style={[
-                  styles.orderTypeText,
-                  orderType === OrderType.DELIVERY && styles.orderTypeTextSelected
-                ]}>{t('Delivery')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={[
-                  styles.orderTypeCard,
-                  orderType === OrderType.PICKUP && styles.orderTypeCardSelected
-                ]}
-                onPress={() => setOrderType(OrderType.PICKUP)}
-              >
-                <View style={styles.orderTypeIcon}>
-                  <Feather name="shopping-bag" size={24} color={orderType === OrderType.PICKUP ? '#10b981' : '#10b981'} />
-                </View>
-                <Text style={[
-                  styles.orderTypeText,
-                  orderType === OrderType.PICKUP && styles.orderTypeTextSelected
-                ]}>{t("Pickup")}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
 
         {/* Summary */}
   
@@ -305,12 +289,10 @@ export default function CheckoutScreen() {
             <Text style={{ color: '#444', fontSize: 16 }}>{t("Total Amount")}</Text>
             <Text style={{ color: '#444', fontSize: 16 }}>{totalProducts.toFixed(3)} DT</Text>
           </View>
-          {orderType === OrderType.DELIVERY && (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-              <Text style={{ color: '#444', fontSize: 16 }}>{t("Delivery Fee")}</Text>
-              <Text style={{ color: '#444', fontSize: 16 }}>{deliveryFee.toFixed(3)} DT</Text>
-            </View>
-          )}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={{ color: '#444', fontSize: 16 }}>{t("Delivery Fee")}</Text>
+            <Text style={{ color: '#444', fontSize: 16 }}>{deliveryFee.toFixed(3)} DT</Text>
+          </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
             <Text style={{ color: '#444', fontSize: 16 }}>{t("Services")} <Feather name="info" size={16} color="#888" /></Text>
             <Text style={{ color: '#444', fontSize: 16 }}>{serviceFee.toFixed(3)} DT</Text>
@@ -321,13 +303,18 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
-      {/* Map Modal for address selection - Only available in delivery mode */}
-      <Modal visible={mapModalVisible && orderType === OrderType.DELIVERY} animationType="slide">
+      {/* Map Modal for address selection */}
+      <Modal visible={mapModalVisible} animationType="slide">
         <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
           <View style={{ flex: 1 }}>
-            {isMapboxInitialized && shouldRenderMap ? (
+            {isMapboxInitialized && shouldRenderMap && !mapError ? (
               <Mapbox.MapView
                 key={`modal-map-${mapKey + 1000}`}
+                ref={(ref) => {
+                  if (ref) {
+                    modalMapRef.current = ref
+                  }
+                }}
                 style={{ flex: 1 }}
                 styleURL={Mapbox.StyleURL.Street}
                 onCameraChanged={(state) => {
@@ -337,9 +324,12 @@ export default function CheckoutScreen() {
                   }
                 }}
                 onDidFinishLoadingMap={() => {
+                  console.log('Modal map loaded successfully')
+                  setIsModalMapReady(true)
                 }}
                 onDidFailLoadingMap={() => {
                   console.error('Modal map failed to load')
+                  setIsModalMapReady(false)
                 }}
               >
                 <Mapbox.Camera
@@ -351,7 +341,24 @@ export default function CheckoutScreen() {
               </Mapbox.MapView>
             ) : (
               <View style={{ flex: 1, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ color: '#6b7280' }}>Loading map...</Text>
+                <Text style={{ color: '#6b7280', marginBottom: 16 }}>
+                  {mapError ? t("Map error - please try again") : t("Loading map...")}
+                </Text>
+                {mapError && (
+                  <TouchableOpacity
+                    onPress={retryMapInitialization}
+                    style={{
+                      backgroundColor: '#10b981',
+                      paddingHorizontal: 20,
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text style={{ color: 'white', fontWeight: '600' }}>
+                      {t("Retry")}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
             {/* Center pin */}
@@ -399,7 +406,7 @@ export default function CheckoutScreen() {
             router.replace({
               pathname: '/(app)/order-confirmation',
               params: {
-                address: orderType === OrderType.DELIVERY ? address : store.address || "Store location",
+                address: address,
                 payment: paymentMethod || 'Pay with cash',
                 items: JSON.stringify(items),
                 total: total,
@@ -408,14 +415,14 @@ export default function CheckoutScreen() {
                 deliveryFee: deliveryFee,
                 serviceFee: serviceFee,
                 store: JSON.stringify(store),
-                client: JSON.stringify(session?.user),
-                orderType: JSON.stringify(orderType),
+                client: JSON.stringify(user),
+                orderType: JSON.stringify(OrderType.DELIVERY),
               },
             });
           }}
         >
           <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>
-            {orderType === OrderType.DELIVERY ? t('Confirm order') : t('Confirm pickup')}
+            {t('Confirm order')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -460,34 +467,4 @@ headerTitle: {
   fontWeight: 'bold',
   color: '#fff',
 },
-  orderTypeCard: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  orderTypeCardSelected: {
-    borderColor: '#10b981',
-    backgroundColor: '#10b981',
-  },
-  orderTypeIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#f0fdf4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  orderTypeText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  orderTypeTextSelected: {
-    color: '#fff',
-  },
 });
