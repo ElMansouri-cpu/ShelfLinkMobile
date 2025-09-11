@@ -70,7 +70,7 @@ export default function AccountScreen() {
                 borderRadius: 20,
                 alignItems: "center",
                 justifyContent: "center",
-              }} onPress={() => { safePush({pathname: `/(app)/home`}) }}>
+              }} onPress={() => { safePush({pathname: `/(app)/orders`}) }}>
             <ArrowLeft size={32} color="#111" />
           </TouchableOpacity>
     
@@ -97,11 +97,11 @@ export default function AccountScreen() {
             onPress={() => safePush('/(app)/orders')} 
           />
 
-          <MenuItem 
+          {/* <MenuItem 
             icon={<User className="h-6 w-6 text-gray-700" />}  
             title={t("My information")} 
             onPress={() => safePush('/account/information/my-information')} 
-          />
+          /> */}
           <MenuItem 
             icon={<Languages className="h-6 w-6 text-gray-700" />}  
             title={t("Language")} 

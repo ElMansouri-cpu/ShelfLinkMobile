@@ -1,14 +1,12 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { ordersService } from "./orders.service";
 
-export const useGetOrders = (userID: string | undefined, organizationId?: string, status?: string) => {
+export const useGetOrders = ( organizationId?: string, status?: string,retailerId?: string) => {
     return useInfiniteQuery({
-        queryKey: ['orders', userID, organizationId, status],
+        queryKey: ['orders', organizationId, status, retailerId],
         queryFn: ({ pageParam = 1 }) => {
-            if (!userID) {
-                throw new Error('User ID is required');
-            }
-            return ordersService.getOrders(userID, pageParam, 10, organizationId, status);
+         
+            return ordersService.getOrders( pageParam, 10, organizationId, status,retailerId);
         },
         getNextPageParam: (lastPage) => {
             if (lastPage.page < lastPage.totalPages) {
@@ -16,7 +14,7 @@ export const useGetOrders = (userID: string | undefined, organizationId?: string
             }
             return undefined;
         },
-        enabled: !!userID && userID !== 'undefined',
+        enabled: !!organizationId && organizationId !== 'undefined',
         initialPageParam: 1,
     })
 }

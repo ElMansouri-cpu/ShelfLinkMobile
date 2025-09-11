@@ -117,7 +117,7 @@ export async function insertPhone(phone: string) {
 
 export async function OTPAuthentication(phone: string) {
   try {
-    const response = await api.post('/auth/retailer/signin/initiate', { phone })
+    const response = await api.post('/auth/team-member/authenticate', { phone })
     return response.data
   } catch (error) {
     throw error
@@ -126,7 +126,7 @@ export async function OTPAuthentication(phone: string) {
 
 export async function OTPVerification(phone: string, code: string) {
   try {
-    const response = await api.post('/auth/retailer/signin/verify', { phone, token: code })
+    const response = await api.post('/auth/team-member/verify', { phone, token: code })
     return response.data
   } catch (error) {
 

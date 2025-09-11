@@ -17,8 +17,9 @@ import { useTranslation } from 'react-i18next';
 import '../../i18n';
 import Header from '../../components/Header';
 import { safePush } from '../../utils/navigation';
-import { useGetInvoiceByOrderId, useGeneratePdf } from '../../services/invoice-service/invoice.query';
+import { useGetInvoiceByOrderId, useGeneratePdf, useAddPayment } from '../../services/invoice-service/invoice.query';
 import { PaymentStatus, PaymentMethod } from '../../services/invoice-service/invoice.type';
+import PaymentModal from '../../components/payment/PaymentModal';
 import * as FileSystem from 'expo-file-system';
 import * as Linking from 'expo-linking';
 import * as Sharing from 'expo-sharing';
@@ -47,14 +48,21 @@ export default function InvoiceScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'details' | 'payments'>('details');
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
   
   const { data: invoiceData, isLoading, error, refetch } = useGetInvoiceByOrderId(
     organizationId as string,
     orderId as string
   );
+  console.log(invoiceData, "invoiceData")
 
   const { data: pdfData, isLoading: isPdfLoading, refetch: generatePdf } = useGeneratePdf(
+    organizationId as string,
+    invoiceData?.id || ''
+  );
+
+  const addPaymentMutation = useAddPayment(
     organizationId as string,
     invoiceData?.id || ''
   );
@@ -68,18 +76,7 @@ export default function InvoiceScreen() {
       const payloadData = lastPayload.new as any;
       const isInvoiceUpdate = lastPayload.table === 'invoices';
       const isOrderUpdate = lastPayload.table === 'orders';
-      
-      console.log('InvoiceScreen - Notification received, refetching invoice data:', {
-        orderId: orderId,
-        organizationId: organizationId,
-        lastPayload: payloadData?.id,
-        invoiceId: invoiceData?.id,
-        table: lastPayload.table,
-        isInvoiceUpdate,
-        isOrderUpdate,
-        payloadOrderId: payloadData?.orderId,
-        payloadInvoiceId: payloadData?.id
-      });
+
       
       // Refetch if it's an invoice update for this order, or an order update for this order
       const shouldRefetch = (isInvoiceUpdate && payloadData?.orderId === orderId) || 
@@ -298,6 +295,38 @@ export default function InvoiceScreen() {
     await handleSaveAndSharePdf();
   };
 
+  // Handle payment addition
+  const handleAddPayment = async (paymentData: {
+    paymentAmount: number;
+    paymentMethod: PaymentMethod;
+    note?: string;
+  }): Promise<void> => {
+    if (!invoiceData?.id) return;
+    
+    return new Promise((resolve, reject) => {
+      addPaymentMutation.mutate(paymentData, {
+        onSuccess: () => {
+          Alert.alert(
+            t('Success'),
+            t('Payment added successfully'),
+            [{ text: t('OK') }]
+          );
+          refetch(); // Refresh invoice data
+          resolve();
+        },
+        onError: (error) => {
+          console.error('Error adding payment:', error);
+          Alert.alert(
+            t('Error'),
+            t('Failed to add payment. Please try again.'),
+            [{ text: t('OK') }]
+          );
+          reject(new Error('Failed to add payment'));
+        }
+      });
+    });
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -345,6 +374,97 @@ export default function InvoiceScreen() {
         return '#ef4444';
       default:
         return '#6b7280';
+    }
+  };
+
+  const getOrderStatusText = (status: string) => {
+    switch (status) {
+      case 'submitted':
+        return t("Submitted");
+      case 'confirmed':
+        return t("Confirmed");
+      case 'processing':
+        return t("Processing");
+      case 'shipped':
+        return t("Shipped");
+      case 'delivered':
+        return t("Delivered");
+      case 'completed':
+        return t("Completed");
+      case 'cancelled':
+        return t("Cancelled");
+      case 'inventory_shortage':
+        return t("Inventory Shortage");
+      case 'other':
+        return t("Other");
+      case 'assigned':
+        return t("Assigned");
+      default:
+        return t("Unknown");
+    }
+  };
+
+  const getOrderStatusColor = (status: string) => {
+    switch (status) {
+      case 'submitted':
+        return '#6b7280';
+      case 'confirmed':
+        return '#3b82f6';
+      case 'processing':
+        return '#f59e0b';
+      case 'shipped':
+        return '#8b5cf6';
+      case 'delivered':
+        return '#059669';
+      case 'completed':
+        return '#059669';
+      case 'cancelled':
+        return '#ef4444';
+      case 'inventory_shortage':
+        return '#f59e0b';
+      case 'other':
+        return '#6b7280';
+      case 'assigned':
+        return '#3b82f6';
+      default:
+        return '#6b7280';
+    }
+  };
+
+  const translateStatusReason = (reason: string) => {
+    // Handle payment reasons with dynamic amounts
+    if (reason.includes('Payment of') && reason.includes('via')) {
+      const parts = reason.split(' via ');
+      if (parts.length === 2) {
+        const amountPart = parts[0].replace('Payment of ', '');
+        const methodPart = parts[1];
+        return `${t("Payment of")} ${amountPart} ${t(methodPart)}`;
+      }
+    }
+    
+    switch (reason) {
+      case 'Order created':
+        return t("Order created");
+      case 'inventory_shortage':
+        return t("Inventory shortage");
+      case 'Order assigned to team member':
+        return t("Order assigned to team member");
+      case 'other':
+        return t("Other");
+      case 'Invoice created':
+        return t("Invoice created");
+      case 'Invoice automatically completed due to full payment':
+        return t("Invoice automatically completed due to full payment");
+      case 'Payment of':
+        return t("Payment of");
+      case 'via cash':
+        return t("via cash");
+      case 'via card':
+        return t("via card");
+      case 'via bank transfer':
+        return t("via bank transfer");
+      default:
+        return reason; // Return original if no translation found
     }
   };
 
@@ -445,23 +565,23 @@ export default function InvoiceScreen() {
         <View style={styles.infoGrid}>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{t("Subtotal")}</Text>
-            <Text style={styles.infoValue}>${invoiceData.subtotalAmount}</Text>
+            <Text style={styles.infoValue}>{invoiceData.subtotalAmount} {t("DT")}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{t("Tax Amount")}</Text>
-            <Text style={styles.infoValue}>${invoiceData.taxAmount}</Text>
+            <Text style={styles.infoValue}>{invoiceData.taxAmount} {t("DT")}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{t("Discount")}</Text>
-            <Text style={styles.infoValue}>-${invoiceData.discountAmount}</Text>
+            <Text style={styles.infoValue}>-{invoiceData.discountAmount} {t("DT")}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{t("Shipping")}</Text>
-            <Text style={styles.infoValue}>${invoiceData.shippingAmount}</Text>
+            <Text style={styles.infoValue}>{invoiceData.shippingAmount} {t("DT")}</Text>
           </View>
           <View style={[styles.infoRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>{t("Total Amount")}</Text>
-            <Text style={styles.totalValue}>${invoiceData.totalAmount}</Text>
+            <Text style={styles.totalValue}>{invoiceData.totalAmount} {t("DT")}</Text>
           </View>
         </View>
       </View>
@@ -482,11 +602,11 @@ export default function InvoiceScreen() {
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{t("Amount Paid")}</Text>
-            <Text style={styles.infoValue}>${invoiceData.paidAmount}</Text>
+            <Text style={styles.infoValue}>{invoiceData.paidAmount} {t("DT")}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{t("Remaining Amount")}</Text>
-            <Text style={styles.infoValue}>${invoiceData.remainingAmount}</Text>
+            <Text style={styles.infoValue}>{invoiceData.remainingAmount} {t("DT")}</Text>
           </View>
           {invoiceData.paymentDate && (
             <View style={styles.infoRow}>
@@ -511,8 +631,8 @@ export default function InvoiceScreen() {
               </View>
               <View style={styles.itemDetails}>
                 <Text style={styles.itemDetail}>{t("Quantity")}: {item.quantity}</Text>
-                <Text style={styles.itemDetail}>{t("Unit Price")}: ${item.unitPrice}</Text>
-                <Text style={styles.itemDetail}>{t("Total")}: ${item.totalAmount}</Text>
+                <Text style={styles.itemDetail}>{t("Unit Price")}: {item.unitPrice} {t("DT")}</Text>
+                <Text style={styles.itemDetail}>{t("Total")}: {item.totalAmount} {t("DT")}</Text>
               </View>
             </View>
           ))}
@@ -529,7 +649,7 @@ export default function InvoiceScreen() {
               <Text style={styles.infoValue}>{invoiceData.retailer.firstName} {invoiceData.retailer.lastName}</Text>
             </View>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>{t("Phone")}</Text>
+              <Text style={styles.infoLabel}>{t("Phone Number")}</Text>
               <Text style={styles.infoValue}>{invoiceData.retailer.phone}</Text>
             </View>
             {invoiceData.retailer.email && (
@@ -540,7 +660,7 @@ export default function InvoiceScreen() {
             )}
             {invoiceData.retailer.location?.address && (
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>{t("Address")}</Text>
+                <Text style={styles.infoLabel}>{t("Store Address")}</Text>
                 <Text style={styles.infoValue}>{invoiceData.retailer.location.address}</Text>
               </View>
             )}
@@ -558,7 +678,7 @@ export default function InvoiceScreen() {
               <Text style={styles.infoValue}>{invoiceData.organization.name}</Text>
             </View>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>{t("Phone")}</Text>
+              <Text style={styles.infoLabel}>{t("Phone Number")}</Text>
               <Text style={styles.infoValue}>{invoiceData.organization.phone}</Text>
             </View>
             {invoiceData.organization.email && (
@@ -569,7 +689,7 @@ export default function InvoiceScreen() {
             )}
             {invoiceData.organization.location?.address && (
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>{t("Address")}</Text>
+                <Text style={styles.infoLabel}>{t("Store Address")}</Text>
                 <Text style={styles.infoValue}>{invoiceData.organization.location.address}</Text>
               </View>
             )}
@@ -645,15 +765,15 @@ export default function InvoiceScreen() {
         <View style={styles.infoGrid}>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{t("Total Amount")}</Text>
-            <Text style={styles.infoValue}>${invoiceData.totalAmount}</Text>
+            <Text style={styles.infoValue}>{invoiceData.totalAmount} {t("DT")}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{t("Amount Paid")}</Text>
-            <Text style={styles.infoValue}>${invoiceData.paidAmount}</Text>
+            <Text style={styles.infoValue}>{invoiceData.paidAmount} {t("DT")}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{t("Remaining Amount")}</Text>
-            <Text style={styles.infoValue}>${invoiceData.remainingAmount}</Text>
+            <Text style={styles.infoValue}>{invoiceData.remainingAmount} {t("DT")}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{t("Payment Status")}</Text>
@@ -675,14 +795,18 @@ export default function InvoiceScreen() {
           {invoiceData.payments.map((payment, index) => (
             <View key={payment.id} style={styles.paymentContainer}>
               <View style={styles.paymentHeader}>
-                <Text style={styles.paymentAmount}>${payment.paymentAmount}</Text>
+                <Text style={styles.paymentAmount}>{payment.paymentAmount} {t("DT")}</Text>
                 <Text style={styles.paymentMethod}>{getPaymentMethodText(payment.paymentMethod)}</Text>
               </View>
               <View style={styles.paymentDetails}>
                 <Text style={styles.paymentDate}>
                   {new Date(payment.paymentDate).toLocaleDateString()} {new Date(payment.paymentDate).toLocaleTimeString()}
                 </Text>
-                <Text style={styles.paymentId}>ID: {payment.id}</Text>
+                {payment.createdByUser && (
+                  <Text style={styles.paymentCreatedBy}>
+                    {t("Created by")}: {payment.createdByUser.firstName} {payment.createdByUser.lastName}
+                  </Text>
+                )}
               </View>
             </View>
           ))}
@@ -705,12 +829,14 @@ export default function InvoiceScreen() {
                   {new Date(statusChange.changedAt).toLocaleDateString()} {new Date(statusChange.changedAt).toLocaleTimeString()}
                 </Text>
               </View>
-              <Text style={styles.statusReason}>{statusChange.reason}</Text>
+              <Text style={styles.statusReason} numberOfLines={3}>{translateStatusReason(statusChange.reason)}</Text>
               {statusChange.amount && (
-                <Text style={styles.statusAmount}>Amount: ${statusChange.amount}</Text>
+                <Text style={styles.statusAmount}>Amount: {statusChange.amount} {t("DT")}</Text>
               )}
-              {statusChange.changedBy && (
-                <Text style={styles.statusChangedBy}>Changed by: {statusChange.changedBy}</Text>
+              {statusChange.changedByUser && (
+                <Text style={styles.statusChangedBy} numberOfLines={2} ellipsizeMode="middle">
+                  Changed by: {statusChange.changedByUser.firstName} {statusChange.changedByUser.lastName}
+                </Text>
               )}
             </View>
           ))}
@@ -733,9 +859,11 @@ export default function InvoiceScreen() {
                   {new Date(statusChange.changedAt).toLocaleDateString()} {new Date(statusChange.changedAt).toLocaleTimeString()}
                 </Text>
               </View>
-              <Text style={styles.statusReason}>{statusChange.reason}</Text>
-              {statusChange.changedBy && (
-                <Text style={styles.statusChangedBy}>Changed by: {statusChange.changedBy}</Text>
+              <Text style={styles.statusReason} numberOfLines={3}>{translateStatusReason(statusChange.reason)}</Text>
+              {statusChange.changedByUser && (
+                <Text style={styles.statusChangedBy} numberOfLines={2} ellipsizeMode="middle">
+                  Changed by: {statusChange.changedByUser.firstName} {statusChange.changedByUser.lastName}
+                </Text>
               )}
             </View>
           ))}
@@ -749,18 +877,20 @@ export default function InvoiceScreen() {
           {invoiceData.order.statusHistory.map((statusChange, index) => (
             <View key={index} style={styles.statusHistoryContainer}>
               <View style={styles.statusHistoryHeader}>
-                <View style={[styles.statusBadge, { backgroundColor: getInvoiceStatusColor(statusChange.status) + '20' }]}>
-                  <Text style={[styles.statusText, { color: getInvoiceStatusColor(statusChange.status) }]}>
-                    {getInvoiceStatusText(statusChange.status)}
+                <View style={[styles.statusBadge, { backgroundColor: getOrderStatusColor(statusChange.status) + '20' }]}>
+                  <Text style={[styles.statusText, { color: getOrderStatusColor(statusChange.status) }]}>
+                    {getOrderStatusText(statusChange.status)}
                   </Text>
                 </View>
                 <Text style={styles.statusDate}>
                   {new Date(statusChange.changedAt).toLocaleDateString()} {new Date(statusChange.changedAt).toLocaleTimeString()}
                 </Text>
               </View>
-              <Text style={styles.statusReason}>{statusChange.reason}</Text>
-              {statusChange.changedBy && (
-                <Text style={styles.statusChangedBy}>Changed by: {statusChange.changedBy}</Text>
+              <Text style={styles.statusReason} numberOfLines={3}>{translateStatusReason(statusChange.reason)}</Text>
+              {statusChange.changedByUser && (
+                <Text style={styles.statusChangedBy} numberOfLines={2} ellipsizeMode="middle">
+                  Changed by: {statusChange.changedByUser.firstName} {statusChange.changedByUser.lastName}
+                </Text>
               )}
             </View>
           ))}
@@ -794,6 +924,31 @@ export default function InvoiceScreen() {
 
       {/* Tab Content */}
       {activeTab === 'details' ? renderInvoiceDetailsTab() : renderPaymentHistoryTab()}
+
+      {/* Payment Button - Only show if invoice is not fully paid and not completed */}
+      {invoiceData && parseFloat(invoiceData.remainingAmount) > 0 && invoiceData.status !== 'completed' && (
+        <View style={styles.paymentButtonContainer}>
+          <TouchableOpacity 
+            style={styles.paymentButton} 
+            onPress={() => setIsPaymentModalOpen(true)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.paymentButtonIcon}>
+              <Feather name="dollar-sign" size={24} color="#fff" />
+            </View>
+            <Text style={styles.paymentButtonText}>{t("Add Payment")}</Text>
+            <View style={styles.paymentButtonSpacer} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        onAddPayment={handleAddPayment}
+        invoice={invoiceData}
+      />
 
     </SafeAreaView>
   );
@@ -876,6 +1031,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 16,
+    paddingBottom: 100, // Add padding for payment button
   },
   invoiceHeader: {
     flexDirection: 'row',
@@ -1079,17 +1235,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    overflow: 'hidden',
   },
   paymentHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+    flexWrap: 'wrap',
   },
   paymentAmount: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#059669',
+    flex: 1,
+    marginRight: 8,
   },
   paymentMethod: {
     fontSize: 14,
@@ -1098,16 +1258,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    flexShrink: 1,
   },
   paymentDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    gap: 4,
   },
   paymentDate: {
     fontSize: 14,
     color: '#6b7280',
   },
   paymentId: {
+    fontSize: 12,
+    color: '#9ca3af',
+    flex: 1,
+    textAlign: 'left',
+  },
+  paymentCreatedBy: {
     fontSize: 12,
     color: '#9ca3af',
   },
@@ -1118,21 +1285,27 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    overflow: 'hidden',
   },
   statusHistoryHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   statusDate: {
     fontSize: 12,
     color: '#6b7280',
+    flex: 1,
+    textAlign: 'right',
   },
   statusReason: {
     fontSize: 14,
     color: '#374151',
     marginBottom: 4,
+    flexWrap: 'wrap',
   },
   statusAmount: {
     fontSize: 14,
@@ -1143,5 +1316,48 @@ const styles = StyleSheet.create({
   statusChangedBy: {
     fontSize: 12,
     color: '#9ca3af',
+    flexWrap: 'wrap',
+  },
+  // Payment button styles
+  paymentButtonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: 10,
+    backgroundColor: 'transparent',
+    zIndex: 1000,
+  },
+  paymentButton: {
+    backgroundColor: "#10b981",
+    borderRadius: 16,
+    paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    shadowColor: "#10b981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  paymentButtonIcon: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  paymentButtonText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  paymentButtonSpacer: {
+    width: 36,
   },
 });

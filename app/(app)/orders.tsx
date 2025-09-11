@@ -14,6 +14,7 @@ import {
   Modal,
   Alert,
   FlatList,
+  TextInput,
 } from "react-native"
 import { Feather } from "@expo/vector-icons"
 import { useRouter } from "expo-router"
@@ -27,7 +28,7 @@ import "../../i18n"
 import { safePush } from "../../utils/navigation"
 import { useNotification } from "../../context/NotificationContext";
 import { OrderStatus } from "../../services/order-service/orders.type"
-import { useGetAllStores } from "../../services/store-service/store.query"
+import { useStoreRetailersInfinite } from "../../hooks/useStoreRetailersInfinite"
 import { IClientRelationship } from "../../services/store-service/store.types"
 interface OrderStatusProps {
   status: string;
@@ -126,10 +127,10 @@ const OrderCardSkeleton = memo(() => {
     <View style={styles.cardContainer}>
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <View style={styles.storeContainer}>
+          <View style={styles.customerContainer}>
             <Animated.View
               style={[
-                styles.storeImage,
+                styles.customerImage,
                 {
                   backgroundColor: bgColor,
                 },
@@ -278,13 +279,15 @@ const OrderCard = memo<{
     <Animated.View style={[styles.cardContainer, { transform: [{ translateY }], opacity }]}>
       <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={onPress}>
         <View style={styles.cardHeader}>
-          <View style={styles.storeContainer}>
+          <View style={styles.customerContainer}>
             <Image
-              source={{ uri: order?.organization?.logoUrl || "https://images.unsplash.com/photo-1504674900247-0877df9cc836" }}
-              style={styles.storeImage}
+              source={{ uri: order?.retailer?.profileImageUrl || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150" }}
+              style={styles.customerImage}
             />
             <View>
-                <Text style={styles.storeName}>{order?.organization?.name || "Store"}</Text>
+                <Text style={styles.customerName}>
+                  {order?.retailer ? `${order.retailer.firstName} ${order.retailer.lastName}` : "Customer"}
+                </Text>
               <Text style={styles.orderDate}>{formatDate(new Date(order.createdAt).toISOString())}</Text>
             </View>
           </View>
@@ -347,11 +350,26 @@ const FilterTab = memo(({ label, isActive, onPress }: FilterTabProps) => (
 ))
 
 export default function OrdersScreen() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [activeFilter, setActiveFilter] = useState("all")
-  const [selectedOrganization, setSelectedOrganization] = useState<IClientRelationship | null>(null)
-  const [showOrganizationModal, setShowOrganizationModal] = useState(false)
-  const { data: stores } = useGetAllStores()
+  const [selectedClient, setSelectedClient] = useState<IClientRelationship | null>(null)
+  const [showClientModal, setShowClientModal] = useState(false)
+  const [clientSearchQuery, setClientSearchQuery] = useState("")
+  console.log(user)
+  
+  // Get clients with infinite scroll and search
+  const {
+    retailers: clients,
+    isLoading: isLoadingClients,
+    loadMore: loadMoreClients,
+    canLoadMore: canLoadMoreClients,
+    isFetchingNextPage: isFetchingNextPageClients,
+    refetch: refetchClients,
+  } = useStoreRetailersInfinite({
+    organizationId: user?.organizationId || "",
+    searchQuery: clientSearchQuery,
+    limit: 20,
+  })
   const { 
     data, 
     isLoading, 
@@ -360,7 +378,11 @@ export default function OrdersScreen() {
     fetchNextPage, 
     hasNextPage, 
     isFetchingNextPage 
-  } = useGetOrders(user?.id, selectedOrganization?.organizationId, activeFilter)
+  } = useGetOrders( 
+    user?.organizationId, 
+    activeFilter,
+    selectedClient?.id
+  )
   const { lastPayload } = useNotification();
   const { mutate: cancelOrder } = useCancelOrder()
 
@@ -371,6 +393,10 @@ export default function OrdersScreen() {
   useEffect(() => {
     console.log('OrdersScreen - userOrders updated:', {
       userId: user?.id,
+      organizationId: user?.organizationId,
+      selectedClientId: selectedClient?.id,
+      selectedClientName: selectedClient ? `${selectedClient.firstName} ${selectedClient.lastName}` : null,
+      activeFilter,
       ordersCount: userOrders?.length,
       totalPages: data?.pages.length,
       hasNextPage,
@@ -378,7 +404,7 @@ export default function OrdersScreen() {
       error: error?.message,
       lastPayload: lastPayload?.new?.id
     });
-  }, [userOrders, isLoading, error, lastPayload, user?.id, data?.pages.length, hasNextPage]);
+  }, [userOrders, isLoading, error, lastPayload, user?.id, user?.organizationId, selectedClient, activeFilter, data?.pages.length, hasNextPage]);
 
   const [refreshing, setRefreshing] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -447,14 +473,14 @@ export default function OrdersScreen() {
     setOrderToCancel(null)
   }
 
-  // Organization selection handlers
-  const handleOrganizationSelect = (organization: IClientRelationship) => {
-    setSelectedOrganization(organization)
-    setShowOrganizationModal(false)
+  // Client selection handlers
+  const handleClientSelect = (client: IClientRelationship) => {
+    setSelectedClient(client)
+    setShowClientModal(false)
   }
 
-  const handleClearOrganizationFilter = () => {
-    setSelectedOrganization(null)
+  const handleClearClientFilter = () => {
+    setSelectedClient(null)
   }
 
   // Render item for FlatList - memoized
@@ -485,38 +511,39 @@ export default function OrdersScreen() {
       {/* Animated Header */}
       <Animated.View style={[styles.header, { height: headerHeight }]}>
         {/* <LinearGradient colors={["#059669", "#10b981"]} style={StyleSheet.absoluteFillObject} /> */}
-        <Header title={t("My Orders")} opacity={1} onBack={() => safePush({pathname: `/(app)/account`})} onSearch={() => {}}  scrollY={scrollY}  />
+        <Header 
+          title={t("My Orders")} 
+          opacity={1} 
+          scrollY={scrollY}
+          rightIcon="user"
+          onRightIconPress={() => safePush({ pathname: "/(app)/account" })}
+        />
 
       </Animated.View>
 
-      {/* Organization Filter */}
+      {/* Client Filter */}
       <View style={styles.organizationFilterContainer}>
-        {/* <View style={styles.organizationFilterLabelContainer}>
-          <Feather name="shopping-bag" size={16} color="#374151" />
-          <Text style={styles.organizationFilterLabel}>{t("Filter by Store")}</Text>
-        </View> */}
-        
         <View style={styles.organizationFilterRow}>
           <TouchableOpacity 
             style={styles.organizationFilterButton}
-            onPress={() => setShowOrganizationModal(true)}
+            onPress={() => setShowClientModal(true)}
             activeOpacity={0.7}
           >
             <View style={styles.organizationFilterButtonContent}>
               <View style={styles.organizationFilterButtonLeft}>
-                {selectedOrganization?.organization.logoUrl ? (
+                {selectedClient?.profileImageUrl ? (
                   <Image
-                    source={{ uri: selectedOrganization.organization.logoUrl }}
+                    source={{ uri: selectedClient.profileImageUrl }}
                     style={styles.organizationFilterLogo}
                   />
                 ) : (
                   <View style={styles.organizationFilterLogoPlaceholder}>
-                    <Feather name="shopping-bag" size={14} color="#6b7280" />
+                    <Feather name="users" size={14} color="#6b7280" />
                   </View>
                 )}
                 <View style={styles.organizationFilterTextContainer}>
                   <Text style={styles.organizationFilterText}>
-                    {selectedOrganization ? selectedOrganization.organization.name : t("All Stores")}
+                    {selectedClient ? `${selectedClient.firstName} ${selectedClient.lastName}` : t("All Clients")}
                   </Text>
                 </View>
               </View>
@@ -524,10 +551,10 @@ export default function OrdersScreen() {
             </View>
           </TouchableOpacity>
           
-          {selectedOrganization && (
+          {selectedClient && (
             <TouchableOpacity 
               style={styles.clearFilterButton}
-              onPress={handleClearOrganizationFilter}
+              onPress={handleClearClientFilter}
               activeOpacity={0.7}
             >
               <Feather name="x" size={16} color="#ef4444" />
@@ -554,7 +581,7 @@ export default function OrdersScreen() {
         </ScrollView>
       </View>
 
-      {!user ? (
+      {authLoading || !user ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Text style={{ fontSize: 18, color: '#666' }}>Loading user...</Text>
         </View>
@@ -594,18 +621,18 @@ export default function OrdersScreen() {
         />
       )}
 
-      {/* Organization Selection Modal */}
+      {/* Client Selection Modal */}
       <Modal
-        visible={showOrganizationModal}
+        visible={showClientModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowOrganizationModal(false)}
+        onRequestClose={() => setShowClientModal(false)}
       >
         <View style={styles.modalOverlay}>
           <TouchableOpacity 
             style={styles.modalBackdrop}
             activeOpacity={1}
-            onPress={() => setShowOrganizationModal(false)}
+            onPress={() => setShowClientModal(false)}
           />
           <View style={styles.organizationModalContent}>
             {/* Modal Handle */}
@@ -613,67 +640,81 @@ export default function OrdersScreen() {
             
             <View style={styles.organizationModalHeader}>
               <View style={styles.organizationModalTitleContainer}>
-                <Feather name="shopping-bag" size={24} color="#059669" />
-                <Text style={styles.organizationModalTitle}>{t("Select Store")}</Text>
+                <Feather name="users" size={24} color="#059669" />
+                <Text style={styles.organizationModalTitle}>{t("Select Client")}</Text>
               </View>
               <TouchableOpacity 
-                onPress={() => setShowOrganizationModal(false)}
+                onPress={() => setShowClientModal(false)}
                 style={styles.closeButton}
               >
                 <Feather name="x" size={20} color="#6b7280" />
               </TouchableOpacity>
             </View>
             
+            {/* Search Input */}
+            <View style={styles.searchContainer}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder={t("Search clients...")}
+                value={clientSearchQuery}
+                onChangeText={setClientSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            
             <FlatList
-              data={stores || []}
-              keyExtractor={(item) => item.organization.id}
+              data={clients || []}
+              keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[
                     styles.organizationItem,
-                    selectedOrganization?.organization.id === item.organization.id && styles.selectedOrganizationItem
+                    selectedClient?.id === item.id && styles.selectedOrganizationItem
                   ]}
-                  onPress={() => handleOrganizationSelect(item)}
+                  onPress={() => handleClientSelect(item)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.organizationItemContent}>
                     <View style={styles.organizationItemLeft}>
                       <View style={styles.organizationLogoContainer}>
-                        {item.organization.logoUrl ? (
+                        {item.profileImageUrl ? (
                           <Image
-                            source={{ uri: item.organization.logoUrl }}
+                            source={{ uri: item.profileImageUrl }}
                             style={styles.organizationLogo}
                           />
                         ) : (
                           <View style={styles.organizationLogoPlaceholder}>
                             <Text style={styles.organizationLogoText}>
-                              {item.organization.name.charAt(0).toUpperCase()}
+                              {item.firstName?.charAt(0).toUpperCase() || '?'}
                             </Text>
                           </View>
                         )}
                       </View>
                       <View style={styles.organizationInfo}>
-                        <Text style={styles.organizationName}>{item.organization.name}</Text>
+                        <Text style={styles.organizationName}>
+                          {item.firstName} {item.lastName}
+                        </Text>
                         <Text style={styles.organizationAddress} numberOfLines={1}>
-                          {item.organization.address || t("No address available")}
+                          {item.location?.address || t("No address available")}
                         </Text>
                         <View style={styles.organizationStats}>
                           <View style={styles.organizationStat}>
-                            <Feather name="package" size={12} color="#6b7280" />
+                            <Feather name="phone" size={12} color="#6b7280" />
                             <Text style={styles.organizationStatText}>
-                              {item.organization.productsCount || 0} {t("products")}
+                              {item.phone}
                             </Text>
                           </View>
                           <View style={styles.organizationStat}>
-                            <Feather name="shopping-cart" size={12} color="#6b7280" />
+                            <Feather name="user" size={12} color="#6b7280" />
                             <Text style={styles.organizationStatText}>
-                              {item.organization.ordersCount || 0} {t("orders")}
+                              {item.role}
                             </Text>
                           </View>
                         </View>
                       </View>
                     </View>
-                    {selectedOrganization?.organization.id === item.organization.id && (
+                    {selectedClient?.id === item.id && (
                       <View style={styles.selectedIndicator}>
                         <Feather name="check-circle" size={24} color="#059669" />
                       </View>
@@ -684,6 +725,24 @@ export default function OrdersScreen() {
               style={styles.organizationList}
               showsVerticalScrollIndicator={true}
               contentContainerStyle={styles.organizationListContent}
+              onEndReached={() => loadMoreClients()}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={
+                isFetchingNextPageClients ? (
+                  <View style={styles.loadingFooter}>
+                    <Text style={styles.loadingText}>{t("Loading more clients...")}</Text>
+                  </View>
+                ) : null
+              }
+              ListEmptyComponent={
+                !isLoadingClients ? (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>
+                      {clientSearchQuery ? t("No clients found matching your search") : t("No clients available")}
+                    </Text>
+                  </View>
+                ) : null
+              }
             />
           </View>
         </View>
@@ -830,6 +889,21 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   storeName: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#111",
+  },
+  customerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  customerImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  customerName: {
     fontSize: 16,
     fontWeight: "bold",
     color: "#111",
@@ -1235,5 +1309,21 @@ const styles = StyleSheet.create({
   },
   selectedIndicator: {
     marginLeft: 12,
+  },
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  searchInput: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    backgroundColor: "#f9fafb",
   },
 })

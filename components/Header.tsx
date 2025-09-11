@@ -2,14 +2,16 @@ import React from 'react'
 import { View, Text, TouchableOpacity, StatusBar, Animated } from 'react-native'
 import { Feather } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-const Header = ({ title, onBack, onSearch, scrollY, opacity, clearCart, onSave }: {
+const Header = ({ title, onBack, onSearch, scrollY, opacity, clearCart, onSave, rightIcon, onRightIconPress }: {
   title: string,
   onBack?: () => void,
   onSearch?: () => void,
   scrollY: Animated.Value,
   clearCart?: () => void,
   opacity?: any,
-  onSave?: () => void
+  onSave?: () => void,
+  rightIcon?: string,
+  onRightIconPress?: () => void
 }) => {
   const { t } = useTranslation();
 
@@ -45,6 +47,7 @@ const Header = ({ title, onBack, onSearch, scrollY, opacity, clearCart, onSave }
             height: 56
           }}
         >
+          {onBack && (
           <TouchableOpacity    style={{
                 width: 40,
                 height: 40,
@@ -55,8 +58,8 @@ const Header = ({ title, onBack, onSearch, scrollY, opacity, clearCart, onSave }
               }} onPress={() => { onBack && onBack(); }}>
             <Feather name="arrow-left" size={22} color="#111" />
           </TouchableOpacity>
-
-          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111' }}>
+          )}
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111', textAlign: 'center', flex: 1 }}>
             {t(title)}
           </Text>
 
@@ -81,6 +84,17 @@ const Header = ({ title, onBack, onSearch, scrollY, opacity, clearCart, onSave }
               justifyContent: "center",
             }} onPress={onSearch}>
               <Feather name="search" size={22} color="#111" />
+            </TouchableOpacity>
+          ) : rightIcon && onRightIconPress ? (
+            <TouchableOpacity style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: "#f3f4f6",
+              alignItems: "center",
+              justifyContent: "center",
+            }} onPress={onRightIconPress}>
+              <Feather name={rightIcon as any} size={22} color="#111" />
             </TouchableOpacity>
           ) : !clearCart && !onSave && (
             <View style={{ width: 24 }} />

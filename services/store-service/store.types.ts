@@ -30,15 +30,35 @@ export interface IOrganization {
 
 export interface IClientRelationship {
     id: string;
-    organization: IOrganization;
-    retailerId: string;
-    approvedBy: string;
-
-    organizationId: string;
-
-    approvedAt: string;
+    phone: string;
+    firstName: string;
+    lastName: string;
+    email: string | null;
+    isOnboarded: boolean;
+    location: {
+        lat: number;
+        lng: number;
+        address: string;
+    } | null;
+    role: string;
     status: string;
+    phoneVerifiedAt: string | null;
+    profileImageUrl: string;
     createdAt: string;
-    createdBy: string;
+    updatedAt: string;
+}
+
+export interface StoreRetailersParams {
+    q?: string;
+    page?: number;
+    limit?: number;
+}
+
+export interface StoreRetailersResponse {
+    items: IClientRelationship[];
+    total: number;
+    page: number;
+    size: number;
+    totalPages: number;
 }
 

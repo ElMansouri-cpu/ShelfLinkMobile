@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "SHELFLINK",
-    "slug": "SHELFLINK",
+    "name": "shelflink-pro",
+    "slug": "shelflink-pro",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/splash-image.png",
+    "icon": "./assets/logoShelf.png",
     "userInterfaceStyle": "dark",
     "scheme": "shelflink",
     "splash": {
-      "image": "./assets/splash-image.png",
+      "image": "./assets/logoShelf.png",
       "resizeMode": "cover",
       "backgroundColor": "#00162e"
     },
@@ -17,9 +17,9 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.bgsc.stori",
+      "package": "com.bgsc.shelflinkpro",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/splash-image.png",
+        "foregroundImage": "./assets/logoShelf.png",
         "backgroundColor": "#00162e"
       },
       "permissions": [
@@ -55,7 +55,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "2832a91b-ca80-4cc8-ade5-86cec171cdb4"
+        "projectId": "6cbb85f3-e052-45dc-bd6c-d3d89070df97"
       },
       "router": {}
     },

@@ -108,7 +108,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             event: "*",
             schema: "public",
             table: "orders",
-            filter: `retailerId=eq.${user?.id}`,
+            filter: `assignedTo=eq.${user?.id}`,
           },
           (payload) => {
              console.log('=== REALTIME UPDATE RECEIVED ===');
@@ -213,7 +213,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
            }
         );
 
-      // Add invoices channel
+      // Add invoices channel - listen to all invoice changes and filter by assigned orders
       const invoicesChannel = supabase
         .channel("invoices")
         .on(
@@ -222,84 +222,124 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             event: "*",
             schema: "public",
             table: "invoices",
-            filter: `retailerId=eq.${user?.id}`,
           },
-          (payload) => {
+          async (payload) => {
             console.log('=== INVOICE REALTIME UPDATE RECEIVED ===');
             console.log('Full payload:', payload);
             console.log('Event type:', payload.eventType);
             console.log('New data:', payload.new);
             console.log('Old data:', payload.old);
             
-            setLastPayload(payload);
-            
-            // Show toast for foreground notifications
-            Toast.show({
-              type: 'success',
-              text1: 'Invoice Update!',
-              text2: `Invoice ${(payload.new as any)?.invoiceNumber} updated`,
-              position: 'top',
-              visibilityTime: 4000,
-            });
-            
-            // Schedule background notification
-            scheduleLocalNotification(
-              'Invoice Update!',
-              `Invoice ${(payload.new as any)?.invoiceNumber} has been updated`
-            );
-            
             const newPayload = payload.new as any;
-            playSound();
+            
+            // Check if this invoice is related to an order assigned to the current user
+            if (newPayload?.orderId) {
+              try {
+                // Fetch the order to check if it's assigned to the current user
+                const { data: order, error } = await supabase
+                  .from('orders')
+                  .select('assignedTo, organizationId')
+                  .eq('id', newPayload.orderId)
+                  .single();
+                
+                if (error) {
+                  console.error('Error fetching order for invoice notification:', error);
+                  return;
+                }
+                
+                // Only process notification if the order is assigned to the current user
+                if (order?.assignedTo !== user?.id) {
+                  console.log('Invoice not related to user assigned orders, skipping notification');
+                  return;
+                }
+                
+                console.log('Invoice is related to user assigned order, processing notification');
+                
+                setLastPayload(payload);
+                
+                // Show toast for foreground notifications
+                Toast.show({
+                  type: 'success',
+                  text1: 'Invoice Update!',
+                  text2: `Invoice ${newPayload?.invoiceNumber} updated`,
+                  position: 'top',
+                  visibilityTime: 4000,
+                });
+                
+                // Schedule background notification
+                scheduleLocalNotification(
+                  'Invoice Update!',
+                  `Invoice ${newPayload?.invoiceNumber} has been updated`
+                );
+                
+                playSound();
+              } catch (error) {
+                console.error('Error processing invoice notification:', error);
+                return;
+              }
+            } else {
+              console.log('No orderId in invoice payload, skipping notification');
+              return;
+            }
             
             // Invalidate invoice queries for the specific invoice
-            if (newPayload?.id && newPayload?.organizationId) {
-              console.log('Invalidating invoice queries for invoice:', newPayload.id, 'org:', newPayload.organizationId);
+            if (newPayload?.id && newPayload?.orderId) {
+              // Get organizationId from the order we fetched earlier
+              const { data: order } = await supabase
+                .from('orders')
+                .select('organizationId')
+                .eq('id', newPayload.orderId)
+                .single();
               
-              // Invalidate specific invoice queries
-              queryClient.invalidateQueries({ 
-                queryKey: ['invoice', newPayload.organizationId, newPayload.orderId] 
-              });
-              
-              // Invalidate all invoice queries with predicate
-              queryClient.invalidateQueries({ 
-                queryKey: ['invoice'],
-                predicate: (query) => {
-                  const [_, orgId, orderId] = query.queryKey;
-                  return orgId === newPayload.organizationId && orderId === newPayload.orderId;
-                }
-              });
-              
-              // Force refetch all invoice queries
-              queryClient.invalidateQueries({ 
-                queryKey: ['invoice']
-              });
-              
-              // Also invalidate PDF queries for this invoice
-              queryClient.invalidateQueries({ 
-                queryKey: ['invoice-pdf', newPayload.organizationId, newPayload.id]
-              });
-              
-              // Invalidate all PDF queries (fallback)
-              queryClient.invalidateQueries({ 
-                queryKey: ['invoice-pdf']
-              });
-              
-              console.log('Invoice queries invalidated successfully');
-              
-              // Force refetch after a short delay to ensure invalidation is processed
-              setTimeout(() => {
-                console.log('Force refetching invoice queries...');
-                queryClient.refetchQueries({ queryKey: ['invoice'] });
-                queryClient.refetchQueries({ queryKey: ['invoice-pdf'] });
-              }, 100);
+              if (order?.organizationId) {
+                console.log('Invalidating invoice queries for invoice:', newPayload.id, 'org:', order.organizationId);
+                
+                // Invalidate specific invoice queries
+                queryClient.invalidateQueries({ 
+                  queryKey: ['invoice', order.organizationId, newPayload.orderId] 
+                });
+                
+                // Invalidate all invoice queries with predicate
+                queryClient.invalidateQueries({ 
+                  queryKey: ['invoice'],
+                  predicate: (query) => {
+                    const [_, orgId, orderId] = query.queryKey;
+                    return orgId === order.organizationId && orderId === newPayload.orderId;
+                  }
+                });
+                
+                // Force refetch all invoice queries
+                queryClient.invalidateQueries({ 
+                  queryKey: ['invoice']
+                });
+                
+                // Also invalidate PDF queries for this invoice
+                queryClient.invalidateQueries({ 
+                  queryKey: ['invoice-pdf', order.organizationId, newPayload.id]
+                });
+                
+                // Invalidate all PDF queries (fallback)
+                queryClient.invalidateQueries({ 
+                  queryKey: ['invoice-pdf']
+                });
+                
+                console.log('Invoice queries invalidated successfully');
+                
+                // Force refetch after a short delay to ensure invalidation is processed
+                setTimeout(() => {
+                  console.log('Force refetching invoice queries...');
+                  queryClient.refetchQueries({ queryKey: ['invoice'] });
+                  queryClient.refetchQueries({ queryKey: ['invoice-pdf'] });
+                }, 100);
+              } else {
+                console.log('Could not get organizationId from order');
+              }
             } else {
-              console.log('Missing invoice ID or organization ID in payload');
+              console.log('Missing invoice ID or order ID in payload');
               console.log('Payload structure:', {
                 id: newPayload?.id,
-                organizationId: newPayload?.organizationId,
                 orderId: newPayload?.orderId,
                 hasId: !!newPayload?.id,
-                hasOrgId: !!newPayload?.organizationId,
                 hasOrderId: !!newPayload?.orderId
               });
             }

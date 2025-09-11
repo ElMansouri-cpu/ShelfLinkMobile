@@ -12,6 +12,8 @@ import {
   Animated,
   Dimensions,
   Platform,
+  Alert,
+  Linking,
 } from "react-native"
 import { Feather } from "@expo/vector-icons"
 import { useLocalSearchParams, useRouter } from "expo-router"
@@ -20,6 +22,10 @@ import { useTranslation } from "react-i18next"
 import "../../i18n"
 import { safePush } from "../../utils/navigation"
 import { useFetchOrderDetails } from "../../services/order-service/orders.query"
+import ItemsValidator from "../../components/validation/ItemsValidator"
+import { OrderStatusTimeline } from "../../components/validation/OrderStatusTimeline"
+import { OrderStatus, OrderItemStatus } from "../../services/order-service/orders.type"
+import { canValidateOrder, getValidationButtonText } from "../../types/validation.types"
 
 const { width } = Dimensions.get("window")
 const HEADER_HEIGHT = 220
@@ -239,6 +245,9 @@ export default function OrderDetailsScreen() {
     extractedOrgId
   )
 
+  // Validation modal state
+  const [isItemsValidatorOpen, setIsItemsValidatorOpen] = useState(false)
+
   // Debug logging for order details
   useEffect(() => {
     console.log('OrderDetailsScreen - orderDetails updated:', {
@@ -383,6 +392,61 @@ export default function OrderDetailsScreen() {
   const deliveryFee = 0
   const serviceFee = 0
 
+  // Validation handlers
+  const handleItemsValidatorOpen = () => {
+    setIsItemsValidatorOpen(true)
+  }
+
+  const handleItemsValidatorClose = () => {
+    setIsItemsValidatorOpen(false)
+  }
+
+  const handleValidationComplete = () => {
+    setIsItemsValidatorOpen(false)
+    // Refresh order details to show updated status
+    refetch()
+  }
+
+  // Complete order handler
+  const handleCompleteOrder = async () => {
+    try {
+      // Import the ordersService to complete the order
+      const { ordersService } = await import('../../services/order-service/orders.service')
+      await ordersService.completeOrder(orderDetails.id, orderDetails.organizationId, "Order completed by user")
+      
+      // Refresh order details to show updated status
+      refetch()
+      
+      // Show success message
+      Alert.alert(t('Success'), t('Order completed successfully!'))
+    } catch (error) {
+      console.error('Error completing order:', error)
+      Alert.alert(t('Error'), t('Failed to complete order. Please try again.'))
+    }
+  }
+
+  const handleGetDirections = () => {
+    if (orderDetails?.latitude && orderDetails?.longitude) {
+
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${orderDetails.latitude},${orderDetails.longitude}`
+      
+      Linking.openURL(url).catch(err => {
+        console.error('Error opening Google Maps:', err)
+        Alert.alert(
+          t("Error"),
+          t("Could not open Google Maps. Please try again."),
+          [{ text: t("OK") }]
+        )
+      })
+    } else {
+      Alert.alert(
+        t("Error"),
+        t("Delivery address coordinates not available."),
+        [{ text: t("OK") }]
+      )
+    }
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="white" />
@@ -391,7 +455,7 @@ export default function OrderDetailsScreen() {
         {/* Animated Header */}
         <Animated.View style={[styles.header, { height: headerHeight }]}>
           <LinearGradient
-            colors={["#10b981", "#059669"]}
+            colors={[COLORS.primary[500], COLORS.primary[600]]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFillObject}
@@ -433,6 +497,30 @@ export default function OrderDetailsScreen() {
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
           scrollEventThrottle={16}
         >
+          {/* Get Directions Button */}
+          {orderDetails && (
+            <View style={styles.directionsButtonContainer}>
+              <TouchableOpacity 
+                style={styles.directionsButton} 
+                onPress={handleGetDirections}
+                activeOpacity={0.8}
+              >
+                <View style={styles.directionsButtonIcon}>
+                  <Feather name="navigation" size={20} color="#fff" />
+                </View>
+                <Text style={styles.directionsButtonText}>{t("Get Directions")}</Text>
+                <View style={styles.directionsButtonSpacer} />
+              </TouchableOpacity>
+            </View>
+          )}
+          {/* Order Status Timeline */}
+          <View style={styles.card}>
+            <OrderStatusTimeline 
+              currentStatus={orderDetails.status as OrderStatus}
+              canValidate={canValidateOrder(orderDetails.status as OrderStatus)}
+            />
+          </View>
+
           {/* Order Info Card */}
           <View style={styles.card}>
             <View style={styles.orderInfoHeader}>
@@ -558,12 +646,6 @@ export default function OrderDetailsScreen() {
             </View>
           </View>
 
-          {/* Reorder Button */}
-          <TouchableOpacity style={styles.reorderButton} activeOpacity={0.8}>
-            <Feather name="refresh-cw" size={20} color="#fff" style={{ marginRight: 8 }} />
-            <Text style={styles.reorderButtonText}>{t("Reorder")}</Text>
-          </TouchableOpacity>
-
           {/* Support Button */}
           <TouchableOpacity style={styles.supportButton}>
             <Feather name="help-circle" size={18} color="#6b7280" style={{ marginRight: 8 }} />
@@ -571,14 +653,157 @@ export default function OrderDetailsScreen() {
           </TouchableOpacity>
         </Animated.ScrollView>
       </Animated.View>
+
+      {/* Sticky Action Button */}
+      {orderDetails.status !== OrderStatus.COMPLETED && (
+        <View style={styles.actionButtonContainer}>
+          {canValidateOrder(orderDetails.status as OrderStatus) ? (
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: "#f59e0b", shadowColor: "#f59e0b" }]} 
+              onPress={handleItemsValidatorOpen}
+              activeOpacity={0.8}
+            >
+              <View style={styles.actionButtonIcon}>
+                <Feather name="check-circle" size={24} color="#fff" />
+              </View>
+              <Text style={styles.actionButtonText}>
+                {t(getValidationButtonText(orderDetails.status as OrderStatus))}
+              </Text>
+              <View style={styles.actionButtonSpacer} />
+            </TouchableOpacity>
+          ) : orderDetails.status === OrderStatus.DELIVERED ? (
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: "#16a34a", shadowColor: "#16a34a" }]} 
+              onPress={handleCompleteOrder}
+              activeOpacity={0.8}
+            >
+              <View style={styles.actionButtonIcon}>
+                <Feather name="check" size={24} color="#fff" />
+              </View>
+              <Text style={styles.actionButtonText}>{t("Complete")}</Text>
+              <View style={styles.actionButtonSpacer} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: "#059669", shadowColor: "#059669" }]} 
+              activeOpacity={0.8}
+            >
+              <View style={styles.actionButtonIcon}>
+                <Feather name="refresh-cw" size={24} color="#fff" />
+              </View>
+              <Text style={styles.actionButtonText}>{t("Reorder")}</Text>
+              <View style={styles.actionButtonSpacer} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Items Validator Modal */}
+      <ItemsValidator
+        isOpen={isItemsValidatorOpen}
+        onClose={handleItemsValidatorClose}
+        items={orderDetails?.items || []}
+        onValidationComplete={handleValidationComplete}
+        originalOrder={orderDetails}
+      />
     </SafeAreaView>
   )
+}
+
+// Modern Design System Constants
+const COLORS = {
+  // Primary Colors
+  primary: {
+    50: '#f0fdf4',
+    100: '#dcfce7', 
+    200: '#bbf7d0',
+    300: '#86efac',
+    400: '#4ade80',
+    500: '#22c55e', // Main green
+    600: '#16a34a',
+    700: '#15803d',
+    800: '#166534',
+    900: '#14532d',
+  },
+  // Neutral Colors
+  neutral: {
+    50: '#f8fafc',
+    100: '#f1f5f9',
+    200: '#e2e8f0',
+    300: '#cbd5e1',
+    400: '#94a3b8',
+    500: '#64748b',
+    600: '#475569',
+    700: '#334155',
+    800: '#1e293b',
+    900: '#0f172a',
+  },
+  // Semantic Colors
+  success: '#22c55e',
+  warning: '#f59e0b',
+  error: '#ef4444',
+  info: '#3b82f6',
+}
+
+const TYPOGRAPHY = {
+  // Font Sizes
+  xs: 12,
+  sm: 14,
+  base: 16,
+  lg: 18,
+  xl: 20,
+  '2xl': 24,
+  '3xl': 30,
+  '4xl': 36,
+  // Font Weights
+  normal: '400' as const,
+  medium: '500' as const,
+  semibold: '600' as const,
+  bold: '700' as const,
+  // Line Heights
+  lineHeightTight: 1.25,
+  lineHeightNormal: 1.5,
+  lineHeightRelaxed: 1.75,
+}
+
+const SPACING = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  '2xl': 48,
+  '3xl': 64,
+}
+
+const SHADOWS = {
+  sm: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  md: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  lg: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 5,
+  },
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: COLORS.neutral[50],
   },
   mainContainer: {
     flex: 1,
@@ -608,10 +833,11 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.3)",
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
+    fontSize: TYPOGRAPHY['2xl'],
+    fontWeight: TYPOGRAPHY.bold,
     color: "white",
-    marginBottom: 10,
+    marginBottom: SPACING.sm,
+    lineHeight: TYPOGRAPHY['2xl'] * TYPOGRAPHY.lineHeightTight,
     textShadowColor: "rgba(0,0,0,0.1)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
@@ -652,25 +878,23 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: HEADER_HEIGHT - COMPACT_HEADER_HEIGHT + 10,
-    paddingBottom: 30,
-    paddingHorizontal: 16,
+    paddingBottom: 100, // Increased to account for sticky button
+    paddingHorizontal: SPACING.md,
   },
   card: {
     backgroundColor: "white",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderRadius: 20,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
+    ...SHADOWS.md,
+    borderWidth: 1,
+    borderColor: COLORS.neutral[100],
   },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: SPACING.md,
   },
   cardTitleContainer: {
     flexDirection: "row",
@@ -678,20 +902,23 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#111",
+    fontSize: TYPOGRAPHY.lg,
+    fontWeight: TYPOGRAPHY.semibold,
+    color: COLORS.neutral[800],
+    lineHeight: TYPOGRAPHY.lg * TYPOGRAPHY.lineHeightTight,
   },
   itemCountBadge: {
-    backgroundColor: "#ecfdf5",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: COLORS.primary[50],
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.primary[100],
   },
   itemCountText: {
-    color: "#059669",
-    fontWeight: "600",
-    fontSize: 12,
+    color: COLORS.primary[600],
+    fontWeight: TYPOGRAPHY.semibold,
+    fontSize: TYPOGRAPHY.xs,
   },
   orderInfoHeader: {
     flexDirection: "row",
@@ -927,26 +1154,29 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   totalLabel: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#111827",
+    fontSize: TYPOGRAPHY.lg,
+    fontWeight: TYPOGRAPHY.semibold,
+    color: COLORS.neutral[800],
   },
   totalValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#059669",
+    fontSize: TYPOGRAPHY.lg,
+    fontWeight: TYPOGRAPHY.bold,
+    color: COLORS.primary[600],
   },
   paymentMethod: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f9fafb",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
+    backgroundColor: COLORS.neutral[50],
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.neutral[200],
   },
   paymentMethodText: {
-    fontSize: 14,
-    color: "#6b7280",
+    fontSize: TYPOGRAPHY.sm,
+    color: COLORS.neutral[600],
+    fontWeight: TYPOGRAPHY.medium,
   },
   reorderButton: {
     backgroundColor: "#059669",
@@ -966,6 +1196,117 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  validationButton: {
+    backgroundColor: "#f59e0b",
+    borderRadius: 16,
+    paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+    shadowColor: "#f59e0b",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  validationButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  completeButton: {
+    backgroundColor: "#16a34a",
+    borderRadius: 16,
+    paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+    shadowColor: "#16a34a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  completeButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  actionButtonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.lg,
+    paddingTop: SPACING.sm,
+    backgroundColor: 'transparent',
+    zIndex: 1000,
+  },
+  actionButton: {
+    backgroundColor: COLORS.primary[500],
+    borderRadius: 20,
+    paddingVertical: SPACING.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: SPACING.lg,
+    ...SHADOWS.lg,
+    minHeight: 56, // Better touch target
+  },
+  actionButtonIcon: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionButtonText: {
+    color: "white",
+    fontSize: TYPOGRAPHY.lg,
+    fontWeight: TYPOGRAPHY.semibold,
+    letterSpacing: 0.5,
+  },
+  actionButtonSpacer: {
+    width: 36,
+  },
+  directionsButtonContainer: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    backgroundColor: 'white',
+    marginBottom: SPACING.md,
+  },
+  directionsButton: {
+    backgroundColor: COLORS.info,
+    borderRadius: 20,
+    paddingVertical: SPACING.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: SPACING.lg,
+    ...SHADOWS.md,
+    minHeight: 56,
+    elevation: 5,
+  },
+  directionsButtonIcon: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  directionsButtonText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  directionsButtonSpacer: {
+    width: 36,
   },
   supportButton: {
     flexDirection: "row",
