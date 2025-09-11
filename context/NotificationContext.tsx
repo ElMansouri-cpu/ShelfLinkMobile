@@ -58,8 +58,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Test function to manually trigger invalidation
   const testInvalidation = () => {
-    console.log('=== MANUAL INVALIDATION TEST ===');
-    console.log('Invalidating all order-details, invoice, and PDF queries...');
+    console.log('=== MANUAL INVALIDATION TEST (RETAILER FILTERED) ===');
+    console.log('Invalidating all order-details, invoice, and PDF queries for retailer:', user?.id);
     queryClient.invalidateQueries({ queryKey: ['order-details'] });
     queryClient.invalidateQueries({ queryKey: ['orders'] });
     queryClient.invalidateQueries({ queryKey: ['invoice'] });
@@ -67,14 +67,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     
     // Force refetch
     setTimeout(() => {
-      console.log('Force refetching all queries...');
+      console.log('Force refetching all queries for retailer...');
       queryClient.refetchQueries({ queryKey: ['order-details'] });
       queryClient.refetchQueries({ queryKey: ['orders'] });
       queryClient.refetchQueries({ queryKey: ['invoice'] });
       queryClient.refetchQueries({ queryKey: ['invoice-pdf'] });
     }, 100);
     
-    console.log('Manual invalidation completed');
+    console.log('Manual invalidation completed for retailer');
   };
 
   // Function to schedule local notification
@@ -97,316 +97,243 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
          return;
        }
 
-       console.log('Setting up realtime subscription for user:', user.id);
-       console.log('User ID type:', typeof user.id);
-       console.log('User ID length:', user.id?.length);
-       
-       // Helper function to create subscription with fallback
-       const createSubscriptionWithFallback = (channelName: string, tableName: string, userId: string) => {
-         const channel = supabase.channel(channelName);
-         
-         // Try different filter approaches
-         const filterOptions = [
-           `retailerId=eq."${userId}"`,
-           `retailerId=eq.${userId}`,
-           `retailer_id=eq."${userId}"`,
-           `retailer_id=eq.${userId}`,
-           `retailerId=eq.uuid."${userId}"`,
-           `retailer_id=eq.uuid."${userId}"`
-         ];
-         
-         let currentFilterIndex = 0;
-         
-         const trySubscribe = () => {
-           if (currentFilterIndex >= filterOptions.length) {
-             console.error(`All filter options failed for ${tableName}, trying without filter`);
-             // Try without filter as last resort
-             return channel.on(
-               "postgres_changes",
-               {
-                 event: "*",
-                 schema: "public",
-                 table: tableName,
-               },
-               (payload) => {
-                 console.log(`=== ${tableName.toUpperCase()} REALTIME UPDATE RECEIVED (NO FILTER) ===`);
-                 console.log('Full payload:', payload);
-                 setLastPayload(payload);
-                 
-                 // Handle the payload based on table type
-                 if (tableName === 'orders') {
-                   handleOrderUpdate(payload);
-                 } else if (tableName === 'invoices') {
-                   handleInvoiceUpdate(payload);
-                 }
-               }
-             );
-           }
-           
-           const filter = filterOptions[currentFilterIndex];
-           console.log(`Trying ${tableName} subscription with filter: ${filter}`);
-           
-           return channel.on(
-             "postgres_changes",
-             {
-               event: "*",
-               schema: "public",
-               table: tableName,
-               filter: filter,
-             },
-             (payload) => {
-               console.log(`=== ${tableName.toUpperCase()} REALTIME UPDATE RECEIVED ===`);
-               console.log('Full payload:', payload);
-               setLastPayload(payload);
-               
-               // Handle the payload based on table type
-               if (tableName === 'orders') {
-                 handleOrderUpdate(payload);
-               } else if (tableName === 'invoices') {
-                 handleInvoiceUpdate(payload);
-               }
-             }
-           );
-         };
-         
-         return trySubscribe();
-       };
-       
-       // Handle order updates
-       const handleOrderUpdate = (payload: any) => {
-         console.log('=== REALTIME UPDATE RECEIVED ===');
-         console.log('Full payload:', payload);
-         console.log('Event type:', payload.eventType);
-         console.log('New data:', payload.new);
-         console.log('Old data:', payload.old);
-          
-         setLastPayload(payload);
-          
-         // Show toast for foreground notifications
-         Toast.show({
-           type: 'success',
-           text1: 'Order Update!',
-            text2: `Order ${(payload.new as any)?.id} updated`,
-           position: 'top',
-           visibilityTime: 4000,
-         });
-          
-         // Schedule background notification
-         scheduleLocalNotification(
-           'Order Update!',
-            `Order ${(payload.new as any)?.id} has been updated`
-          );
-          
-         const newPayload = payload.new as Order;
-         playSound();
-         
-         // Invalidate order details query for the specific order
-         if (newPayload?.id && newPayload?.organizationId) {
-           console.log('Invalidating queries for order:', newPayload.id, 'org:', newPayload.organizationId);
-           
-           // Invalidate specific order details
-           queryClient.invalidateQueries({ 
-             queryKey: ['order-details', newPayload.id, newPayload.organizationId] 
-           });
-           
-           // Invalidate all order details queries with predicate
-           queryClient.invalidateQueries({ 
-             queryKey: ['order-details'],
-             predicate: (query) => {
-               const [_, orderId, orgId] = query.queryKey;
-               return orderId === newPayload.id && orgId === newPayload.organizationId;
-             }
-           });
-           
-           // Force refetch all order details queries
-           queryClient.invalidateQueries({ 
-             queryKey: ['order-details']
-           });
-           
-           // Invalidate orders list for the current user
-           if (user?.id) {
-             // Invalidate all orders queries for this user (regardless of status filter)
-             queryClient.invalidateQueries({ 
-               queryKey: ['orders', user.id],
-               exact: false
-             });
-             
-             // Also invalidate with organization filter if present
-             queryClient.invalidateQueries({ 
-               queryKey: ['orders', user.id, newPayload.organizationId],
-               exact: false
-             });
-           }
-           
-           // Also invalidate all orders queries (fallback)
-           queryClient.invalidateQueries({ 
-             queryKey: ['orders'] 
-           });
-           
-           // Invalidate invoice queries for this order
-           queryClient.invalidateQueries({ 
-             queryKey: ['invoice', newPayload.organizationId, newPayload.id]
-           });
-           
-           // Invalidate all invoice queries (fallback)
-           queryClient.invalidateQueries({ 
-             queryKey: ['invoice'] 
-           });
-           
-           console.log('Queries invalidated successfully');
-           
-           // Force refetch after a short delay to ensure invalidation is processed
-           setTimeout(() => {
-             console.log('Force refetching queries...');
-             queryClient.refetchQueries({ queryKey: ['order-details'] });
-             queryClient.refetchQueries({ queryKey: ['orders'] });
-             queryClient.refetchQueries({ queryKey: ['invoice'] });
-           }, 100);
-         } else {
-           console.log('Missing order ID or organization ID in payload');
-           console.log('Payload structure:', {
-             id: newPayload?.id,
-             organizationId: newPayload?.organizationId,
-             hasId: !!newPayload?.id,
-             hasOrgId: !!newPayload?.organizationId
-           });
-         }
-         
-         triggerRefresh();
-       };
-       
-       // Handle invoice updates
-       const handleInvoiceUpdate = (payload: any) => {
-         console.log('=== INVOICE REALTIME UPDATE RECEIVED ===');
-         console.log('Full payload:', payload);
-         console.log('Event type:', payload.eventType);
-         console.log('New data:', payload.new);
-         console.log('Old data:', payload.old);
-         
-         setLastPayload(payload);
-         
-         // Show toast for foreground notifications
-         Toast.show({
-           type: 'success',
-           text1: 'Invoice Update!',
-           text2: `Invoice ${(payload.new as any)?.invoiceNumber} updated`,
-           position: 'top',
-           visibilityTime: 4000,
-         });
-         
-         // Schedule background notification
-         scheduleLocalNotification(
-           'Invoice Update!',
-           `Invoice ${(payload.new as any)?.invoiceNumber} has been updated`
-         );
-         
-         const newPayload = payload.new as any;
-         playSound();
-         
-         // Invalidate invoice queries for the specific invoice
-         if (newPayload?.id && newPayload?.organizationId) {
-           console.log('Invalidating invoice queries for invoice:', newPayload.id, 'org:', newPayload.organizationId);
-           
-           // Invalidate specific invoice queries
-           queryClient.invalidateQueries({ 
-             queryKey: ['invoice', newPayload.organizationId, newPayload.orderId] 
-           });
-           
-           // Invalidate all invoice queries with predicate
-           queryClient.invalidateQueries({ 
-             queryKey: ['invoice'],
-             predicate: (query) => {
-               const [_, orgId, orderId] = query.queryKey;
-               return orgId === newPayload.organizationId && orderId === newPayload.orderId;
-             }
-           });
-           
-           // Force refetch all invoice queries
-           queryClient.invalidateQueries({ 
-             queryKey: ['invoice']
-           });
-           
-           // Also invalidate PDF queries for this invoice
-           queryClient.invalidateQueries({ 
-             queryKey: ['invoice-pdf', newPayload.organizationId, newPayload.id]
-           });
-           
-           // Invalidate all PDF queries (fallback)
-           queryClient.invalidateQueries({ 
-             queryKey: ['invoice-pdf']
-           });
-           
-           console.log('Invoice queries invalidated successfully');
-           
-           // Force refetch after a short delay to ensure invalidation is processed
-           setTimeout(() => {
-             console.log('Force refetching invoice queries...');
-             queryClient.refetchQueries({ queryKey: ['invoice'] });
-             queryClient.refetchQueries({ queryKey: ['invoice-pdf'] });
-           }, 100);
-         } else {
-           console.log('Missing invoice ID or organization ID in payload');
-           console.log('Payload structure:', {
-             id: newPayload?.id,
-             organizationId: newPayload?.organizationId,
-             orderId: newPayload?.orderId,
-             hasId: !!newPayload?.id,
-             hasOrgId: !!newPayload?.organizationId,
-             hasOrderId: !!newPayload?.orderId
-           });
-         }
-         
-         triggerRefresh();
-       };
+       console.log('Setting up realtime subscription for retailer:', user.id);
 
-      // Create channels with fallback approach
-      let ordersChannel = createSubscriptionWithFallback("orders", "orders", user.id);
-      let invoicesChannel = createSubscriptionWithFallback("invoices", "invoices", user.id);
+      // Create separate channels for orders and invoices
+      const ordersChannel = supabase
+        .channel("orders")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "orders",
+            filter: `retailerId=eq.${user?.id}`,
+          },
+          (payload) => {
+             console.log('=== ORDER REALTIME UPDATE RECEIVED ===');
+             console.log('Full payload:', payload);
+             console.log('Event type:', payload.eventType);
+             console.log('New data:', payload.new);
+             console.log('Old data:', payload.old);
+             console.log('Retailer ID filter:', user?.id);
+             
+            setLastPayload(payload);
+             
+            // Show toast for foreground notifications
+            Toast.show({
+              type: 'success',
+              text1: 'Order Update!',
+               text2: `Order ${(payload.new as any)?.id} updated`,
+              position: 'top',
+              visibilityTime: 4000,
+            });
+             
+            // Schedule background notification
+            scheduleLocalNotification(
+              'Order Update!',
+               `Order ${(payload.new as any)?.id} has been updated`
+             );
+             
+             const newPayload = payload.new as Order;
+             playSound();
+             
+             // Invalidate order details query for the specific order
+             if (newPayload?.id && newPayload?.organizationId) {
+               console.log('Invalidating queries for retailer order:', newPayload.id, 'org:', newPayload.organizationId, 'retailer:', newPayload.retailerId);
+               
+               // Invalidate specific order details
+               queryClient.invalidateQueries({ 
+                 queryKey: ['order-details', newPayload.id, newPayload.organizationId] 
+               });
+               
+               // Invalidate all order details queries with predicate
+               queryClient.invalidateQueries({ 
+                 queryKey: ['order-details'],
+                 predicate: (query) => {
+                   const [_, orderId, orgId] = query.queryKey;
+                   return orderId === newPayload.id && orgId === newPayload.organizationId;
+                 }
+               });
+               
+               // Force refetch all order details queries
+               queryClient.invalidateQueries({ 
+                 queryKey: ['order-details']
+               });
+               
+               // Invalidate orders list for the current user
+               if (user?.id) {
+                 // Invalidate all orders queries for this user (regardless of status filter)
+                 queryClient.invalidateQueries({ 
+                   queryKey: ['orders', user.id],
+                   exact: false
+                 });
+                 
+                 // Also invalidate with organization filter if present
+                 queryClient.invalidateQueries({ 
+                   queryKey: ['orders', user.id, newPayload.organizationId],
+                   exact: false
+                 });
+               }
+               
+               // Also invalidate all orders queries (fallback)
+               queryClient.invalidateQueries({ 
+                 queryKey: ['orders'] 
+               });
+               
+               // Invalidate invoice queries for this order
+               queryClient.invalidateQueries({ 
+                 queryKey: ['invoice', newPayload.organizationId, newPayload.id]
+               });
+               
+               // Invalidate all invoice queries (fallback)
+               queryClient.invalidateQueries({ 
+                 queryKey: ['invoice'] 
+               });
+               
+               console.log('Queries invalidated successfully');
+               
+               // Force refetch after a short delay to ensure invalidation is processed
+               setTimeout(() => {
+                 console.log('Force refetching queries...');
+                 queryClient.refetchQueries({ queryKey: ['order-details'] });
+                 queryClient.refetchQueries({ queryKey: ['orders'] });
+                 queryClient.refetchQueries({ queryKey: ['invoice'] });
+               }, 100);
+             } else {
+               console.log('Missing order ID or organization ID in payload');
+               console.log('Payload structure:', {
+                 id: newPayload?.id,
+                 organizationId: newPayload?.organizationId,
+                 retailerId: newPayload?.retailerId,
+                 hasId: !!newPayload?.id,
+                 hasOrgId: !!newPayload?.organizationId,
+                 hasRetailerId: !!newPayload?.retailerId
+               });
+             }
+             
+             triggerRefresh();
+           }
+        );
+
+      // Add invoices channel - listen to invoice changes filtered by retailerId
+      const invoicesChannel = supabase
+        .channel("invoices")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "invoices",
+            filter: `retailerId=eq.${user?.id}`,
+          },
+          async (payload) => {
+            console.log('=== INVOICE REALTIME UPDATE RECEIVED ===');
+            console.log('Full payload:', payload);
+            console.log('Event type:', payload.eventType);
+            console.log('New data:', payload.new);
+            console.log('Old data:', payload.old);
+            console.log('Retailer ID filter:', user?.id);
+            
+            const newPayload = payload.new as any;
+            
+            // Since we're filtering by retailerId, we know this invoice belongs to the current user
+            if (newPayload?.id) {
+              console.log('Invoice is related to current retailer, processing notification');
+                
+              setLastPayload(payload);
+              
+              // Show toast for foreground notifications
+              Toast.show({
+                type: 'success',
+                text1: 'Invoice Update!',
+                text2: `Invoice ${newPayload?.invoiceNumber} updated`,
+                position: 'top',
+                visibilityTime: 4000,
+              });
+              
+              // Schedule background notification
+              scheduleLocalNotification(
+                'Invoice Update!',
+                `Invoice ${newPayload?.invoiceNumber} has been updated`
+              );
+              
+              playSound();
+              
+              // Invalidate invoice queries for the specific invoice
+              if (newPayload?.organizationId && newPayload?.orderId) {
+                console.log('Invalidating invoice queries for retailer invoice:', newPayload.id, 'org:', newPayload.organizationId, 'retailer:', newPayload.retailerId);
+                
+                // Invalidate specific invoice queries
+                queryClient.invalidateQueries({ 
+                  queryKey: ['invoice', newPayload.organizationId, newPayload.orderId] 
+                });
+                
+                // Invalidate all invoice queries with predicate
+                queryClient.invalidateQueries({ 
+                  queryKey: ['invoice'],
+                  predicate: (query) => {
+                    const [_, orgId, orderId] = query.queryKey;
+                    return orgId === newPayload.organizationId && orderId === newPayload.orderId;
+                  }
+                });
+                
+                // Force refetch all invoice queries
+                queryClient.invalidateQueries({ 
+                  queryKey: ['invoice']
+                });
+                
+                // Also invalidate PDF queries for this invoice
+                queryClient.invalidateQueries({ 
+                  queryKey: ['invoice-pdf', newPayload.organizationId, newPayload.id]
+                });
+                
+                // Invalidate all PDF queries (fallback)
+                queryClient.invalidateQueries({ 
+                  queryKey: ['invoice-pdf']
+                });
+                
+                console.log('Invoice queries invalidated successfully');
+                
+                // Force refetch after a short delay to ensure invalidation is processed
+                setTimeout(() => {
+                  console.log('Force refetching invoice queries...');
+                  queryClient.refetchQueries({ queryKey: ['invoice'] });
+                  queryClient.refetchQueries({ queryKey: ['invoice-pdf'] });
+                }, 100);
+              } else {
+                console.log('Missing organizationId or orderId in invoice payload');
+                console.log('Payload structure:', {
+                  id: newPayload?.id,
+                  organizationId: newPayload?.organizationId,
+                  orderId: newPayload?.orderId,
+                  retailerId: newPayload?.retailerId,
+                  hasId: !!newPayload?.id,
+                  hasOrgId: !!newPayload?.organizationId,
+                  hasOrderId: !!newPayload?.orderId,
+                  hasRetailerId: !!newPayload?.retailerId
+                });
+              }
+            } else {
+              console.log('Missing invoice ID in payload');
+            }
+            
+            triggerRefresh();
+          }
+        );
 
       // Subscribe to both channels with error handling
       ordersChannel.subscribe((status) => {
-        console.log('Orders realtime subscription status:', status);
+        console.log('Orders realtime subscription status (retailer filtered):', status);
         if (status === 'CHANNEL_ERROR') {
-          console.error('Orders channel error - check table permissions and filter syntax');
-          // Try to resubscribe with a new channel after a delay
-          setTimeout(() => {
-            console.log('Attempting to resubscribe to orders channel...');
-            // Unsubscribe from the old channel first
-            ordersChannel.unsubscribe();
-            // Create a new channel instance
-            ordersChannel = createSubscriptionWithFallback("orders-retry", "orders", user.id);
-            ordersChannel.subscribe((retryStatus) => {
-              console.log('Orders retry subscription status:', retryStatus);
-              if (retryStatus === 'SUBSCRIBED') {
-                console.log('Successfully resubscribed to orders channel');
-              }
-            });
-          }, 5000);
-        } else if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to orders channel');
+          console.error('Orders channel error - check table permissions and retailerId filter syntax');
         }
       });
 
       invoicesChannel.subscribe((status) => {
-        console.log('Invoices realtime subscription status:', status);
+        console.log('Invoices realtime subscription status (retailer filtered):', status);
         if (status === 'CHANNEL_ERROR') {
-          console.error('Invoices channel error - check table permissions and filter syntax');
-          // Try to resubscribe with a new channel after a delay
-          setTimeout(() => {
-            console.log('Attempting to resubscribe to invoices channel...');
-            // Unsubscribe from the old channel first
-            invoicesChannel.unsubscribe();
-            // Create a new channel instance
-            invoicesChannel = createSubscriptionWithFallback("invoices-retry", "invoices", user.id);
-            invoicesChannel.subscribe((retryStatus) => {
-              console.log('Invoices retry subscription status:', retryStatus);
-              if (retryStatus === 'SUBSCRIBED') {
-                console.log('Successfully resubscribed to invoices channel');
-              }
-            });
-          }, 5000);
-        } else if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to invoices channel');
+          console.error('Invoices channel error - check table permissions and retailerId filter syntax');
         }
       });
 
