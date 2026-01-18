@@ -516,7 +516,7 @@ export default function OrdersScreen() {
       {/* Animated Header */}
       <Animated.View style={[styles.header, { height: headerHeight }]}>
         {/* <LinearGradient colors={["#059669", "#10b981"]} style={StyleSheet.absoluteFillObject} /> */}
-        <Header title={t("My Orders")} opacity={1} onBack={() => safePush({pathname: `/(app)/account`})}   scrollY={scrollY}  />
+        <Header title={t("My Orders")} opacity={1} scrollY={scrollY} showBackButton={false} />
 
       </Animated.View>
 
@@ -587,7 +587,7 @@ export default function OrdersScreen() {
 
       {!user ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ fontSize: 18, color: '#666' }}>Loading user...</Text>
+          <Text style={{ fontSize: 18, color: '#666' }}>{t("Loading user...")}</Text>
         </View>
       ) : isLoading && !refreshing ? (
         <SkeletonLoading />
@@ -596,7 +596,7 @@ export default function OrdersScreen() {
           data={userOrders}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 }]}
           showsVerticalScrollIndicator={false}
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
           scrollEventThrottle={16}
@@ -612,7 +612,7 @@ export default function OrdersScreen() {
           ListFooterComponent={
             isFetchingNextPage ? (
               <View style={styles.loadingFooter}>
-                <Text style={styles.loadingText}>Loading more orders...</Text>
+                <Text style={styles.loadingText}>{t("Loading more orders...")}</Text>
               </View>
             ) : null
           }
@@ -756,6 +756,7 @@ export default function OrdersScreen() {
           </View>
         </View>
       </Modal>
+      
     </SafeAreaView>
   )
 }
@@ -816,7 +817,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f5",
   },
   activeFilterTab: {
-    backgroundColor: "#059669",
+    backgroundColor: "#48C6A8",
   },
   filterText: {
     fontSize: 14,

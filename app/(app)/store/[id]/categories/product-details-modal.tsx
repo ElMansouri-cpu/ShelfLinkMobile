@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   selectedThumbnail: {
-    borderColor: '#10B981',
+    borderColor: '#48C6A8',
   },
   thumbnail: {
     width: '100%',
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#10B981',
+    color: '#48C6A8',
     marginRight: 8,
   },
   originalPrice: {
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10B981',
+    backgroundColor: '#48C6A8',
     borderRadius: 12,
     height: 50,
   },
@@ -471,7 +471,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10B981',
+    backgroundColor: '#48C6A8',
     borderRadius: 12,
     height: 50,
   },

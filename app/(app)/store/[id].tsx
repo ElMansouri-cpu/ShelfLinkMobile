@@ -25,12 +25,14 @@ import { useGetAllCategories } from "../../../services/categorie-service/categor
 import { useTranslation } from 'react-i18next'
 import { safePush } from "../../../utils/navigation"
 import { useFocusEffect } from '@react-navigation/native';
+import '../../../i18n'
 
 const BANNER_HEIGHT = 220
 const HEADER_HEIGHT = 60
 
 // Skeleton component for store details
-const StoreDetailsSkeleton = ({ scrollY, insets }: { scrollY: Animated.Value; insets: any }) => {
+const StoreDetailsSkeleton = ({ insets }: { insets: any }) => {
+  const { t } = useTranslation();
   const animatedValue = new Animated.Value(0)
 
   useEffect(() => {
@@ -59,7 +61,7 @@ const StoreDetailsSkeleton = ({ scrollY, insets }: { scrollY: Animated.Value; in
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "white" }}>
-      <Header title="Loading..." scrollY={scrollY}  />
+      <Header title={t("Loading...")} scrollY={undefined}  />
       <ScrollView style={{ flex: 1, backgroundColor: "#f9fafb" }}>
         {/* Banner Skeleton */}
         <Animated.View
@@ -160,31 +162,7 @@ export default function StoreScreen() {
   console.log('Store page - Store param:', store)
   console.log('Store page - StoreInfo:', storeInfo)
   const insets = useSafeAreaInsets()
-  // Animation values
-  const scrollY = new Animated.Value(0)
   const searchInputRef = useRef(null)
-
-  // Animated values for header
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, BANNER_HEIGHT - HEADER_HEIGHT],
-    outputRange: [0, 1],
-    extrapolate: "clamp",
-    easing: Easing.inOut(Easing.ease),
-  })
-
-  const bannerScale = scrollY.interpolate({
-    inputRange: [-100, 0],
-    outputRange: [1.2, 1],
-    extrapolate: "clamp",
-    easing: Easing.inOut(Easing.ease),
-  })
-
-  const bannerOpacity = scrollY.interpolate({
-    inputRange: [0, BANNER_HEIGHT - HEADER_HEIGHT, BANNER_HEIGHT],
-    outputRange: [1, 0.9, 0],
-    extrapolate: "clamp",
-    easing: Easing.inOut(Easing.ease),
-  })
 
   // Filter categories based on search query
   const filteredCategories =
@@ -204,45 +182,41 @@ export default function StoreScreen() {
   }
 
   if (categoriesLoading) {
-    return <StoreDetailsSkeleton scrollY={scrollY} insets={insets} />
+    return <StoreDetailsSkeleton insets={insets} />
   }
 
   if (categoriesError || !store) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "white" }}>
         <Feather name="alert-circle" size={60} color="#ef4444" style={{ marginBottom: 16 }} />
-        <Text style={{ color: "#ef4444", fontSize: 16, marginBottom: 24 }}>{categoriesError?.message || 'An error occurred'}</Text>
+        <Text style={{ color: "#ef4444", fontSize: 16, marginBottom: 24 }}>{categoriesError?.message || t('An error occurred')}</Text>
         <TouchableOpacity
           onPress={() => refetchCategories()}
           style={{
-            backgroundColor: "#10b981",
+            backgroundColor: "#48C6A8",
             paddingVertical: 12,
             paddingHorizontal: 24,
             borderRadius: 999,
           }}
         >
-          <Text style={{ color: "white", fontWeight: "600" }}>Retry</Text>
+          <Text style={{ color: "white", fontWeight: "600" }}>{t("Retry")}</Text>
         </TouchableOpacity>
       </View>
     )
   }
   return (
     <>
-      <Header title={storeInfo?.organization?.name || "Store"} scrollY={scrollY}  />
-      <Animated.ScrollView
+      <Header title={storeInfo?.organization?.name || "Store"} scrollY={undefined}  />
+      <ScrollView
       ref={scrollRef}
         style={{ flex: 1, backgroundColor: "#f9fafb" }}
         contentContainerStyle={{ paddingBottom: items.length > 0 ? 100 : 30 }}
         showsVerticalScrollIndicator={false}
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
-        scrollEventThrottle={16}
       >
         {/* Store Banner */}
-        <Animated.View
+        <View
           style={{
             height: BANNER_HEIGHT,
-            transform: [{ scale: bannerScale }],
-            opacity: bannerOpacity,
           }}
         >
           <Image
@@ -287,7 +261,7 @@ export default function StoreScreen() {
               </Text>
 
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-                <MaterialIcons name="delivery-dining" size={18} color="#10b981" />
+                <MaterialIcons name="delivery-dining" size={18} color="#48C6A8" />
                 <Text style={{ color: "#6b7280", marginLeft: 6 }}>{t('Free delivery')}</Text>
                 <Text style={{ color: "#6b7280", marginHorizontal: 6 }}>•</Text>
                 <FontAwesome name="star" size={16} color="#f59e0b" />
@@ -304,13 +278,13 @@ export default function StoreScreen() {
                     marginRight: 8,
                   }}
                 >
-                  <Text style={{ color: "#10b981", fontWeight: "600", fontSize: 12 }}>{t('Open Now')}</Text>
+                  <Text style={{ color: "#48C6A8", fontWeight: "600", fontSize: 12 }}>{t('Open Now')}</Text>
                 </View>
                 <Text style={{ color: "#6b7280", fontSize: 13 }}>{t('Closes at')} 22:00</Text>
               </View>
             </View>
           </View>
-        </Animated.View>
+        </View>
 
         {/* Search Bar (conditionally rendered) */}
         {showSearch && (
@@ -360,7 +334,7 @@ export default function StoreScreen() {
         )}
 
         {/* Store Info Cards */}
-        <View style={{ padding: 16 }}>
+        {/* <View style={{ padding: 16 }}>
           <View
             style={{
               flexDirection: "row",
@@ -437,7 +411,7 @@ export default function StoreScreen() {
               </View>
             </View>
           </View>
-        </View>
+        </View> */}
 
         {/* Categories Section */}
         <View style={{ paddingBottom: 20 }}>
@@ -469,7 +443,7 @@ export default function StoreScreen() {
                 <View
                   key={category.id}
                   style={{
-                    width: "25%",
+                    width: "33%",
                     paddingHorizontal: 4,
                     paddingBottom: 12,
                   }}
@@ -534,7 +508,7 @@ export default function StoreScreen() {
             })}
           </View>
         </View>
-      </Animated.ScrollView>
+      </ScrollView>
 
       {/* Cart Button */}
       {items.length > 0 && (
@@ -548,14 +522,14 @@ export default function StoreScreen() {
         >
           <TouchableOpacity
             style={{
-              backgroundColor: "#10b981",
+              backgroundColor: "#48C6A8",
               borderRadius: 16,
               paddingVertical: 16,
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
               paddingHorizontal: 20,
-              shadowColor: "#10b981",
+              shadowColor: "#48C6A8",
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.3,
               shadowRadius: 8,
@@ -588,30 +562,6 @@ export default function StoreScreen() {
         </View>
       )}
 
-      {/* Back Button (only visible when scrolled) */}
-      <Animated.View
-        style={{
-          position: "absolute",
-          top: Platform.OS === "ios" ? 44 : (StatusBar.currentHeight || 0) -27,
-          left: 16,
-          width: 40,
-          height: 40,
-
-          borderRadius: 20,
-          backgroundColor: "rgba(0,0,0,0.3)",
-          alignItems: "center",
-          justifyContent: "center",
-          opacity: Animated.subtract(1, headerOpacity),
-          zIndex: 20,
-        }}
-      >
-        <TouchableOpacity onPress={() => {
-          clearCart()
-          router.back()
-          }}>
-          <Feather name="arrow-left" size={24} color="white" />
-        </TouchableOpacity>
-      </Animated.View>
     </>
   )
 }

@@ -1,5 +1,5 @@
 "use client"
-import { View, Text, ScrollView, TouchableOpacity, SafeAreaView, Alert } from "react-native"
+import { View, Text, ScrollView, TouchableOpacity, SafeAreaView, Alert, Image, StatusBar } from "react-native"
 import {
   X,
   HelpCircle,
@@ -51,38 +51,40 @@ export default function AccountScreen() {
 
   if (authLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-[#FFBA08] justify-center items-center">
-        <Text className="text-lg">Loading...</Text>
+      <SafeAreaView className="flex-1 bg-[#1A2A4F] justify-center items-center">
+        <StatusBar barStyle="light-content" backgroundColor="#1A2A4F" />
+        <Text className="text-lg text-white">Loading...</Text>
       </SafeAreaView>
     )
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#FFBA08]">
+    <SafeAreaView className="flex-1 bg-[#1A2A4F]">
+      <StatusBar barStyle="light-content" backgroundColor="#1A2A4F" />
 
 
       {/* Header */}
       <View className="px-4 py-3 flex-row justify-between items-center">
        
-        <TouchableOpacity    style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                alignItems: "center",
-                justifyContent: "center",
-              }} onPress={() => { safePush({pathname: `/(app)/home`}) }}>
-            <ArrowLeft size={32} color="#111" />
-          </TouchableOpacity>
-    
       </View>
 
       {/* Greeting */}
       <View className="px-4 py-6">
         <View className="flex-row items-center">
-          <View className="h-14 w-14 rounded-full bg-[#7DD3D8] justify-center items-center mr-3">
-            <Text className="text-white text-xl font-bold">{username ? username.charAt(0).toUpperCase() : "U"}</Text>
+          <View className="h-14 w-14 rounded-full bg-gray-200 justify-center items-center mr-3 overflow-hidden">
+            {user?.profileImageUrl ? (
+              <Image 
+                source={{ uri: user.profileImageUrl }} 
+                className="w-full h-full"
+                resizeMode="cover"
+              />
+            ) : (
+              <Text className="text-white text-xl font-bold bg-[#48C6A8] w-full h-full flex items-center justify-center">
+                {username ? username.charAt(0).toUpperCase() : "U"}
+              </Text>
+            )}
           </View>        
-          <Text className="text-3xl font-bold text-black">{t("Hello")}, {username || "User"}.</Text>
+          <Text className="text-3xl font-bold text-white">{t("Hello")}, {username || "User"}.</Text>
         </View>
       </View>
 
@@ -91,12 +93,6 @@ export default function AccountScreen() {
         <Text className="text-2xl font-bold mb-4">{t("Account")}</Text>
 
         <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-          <MenuItem 
-            icon={<ShoppingBag className="h-6 w-6 text-gray-700" />}  
-            title={t("My orders")} 
-            onPress={() => safePush('/(app)/orders')} 
-          />
-
           <MenuItem 
             icon={<User className="h-6 w-6 text-gray-700" />}  
             title={t("My information")} 
@@ -129,6 +125,7 @@ export default function AccountScreen() {
           <View className="h-20" />
         </ScrollView>
       </View>
+      
     </SafeAreaView>
   )
 }

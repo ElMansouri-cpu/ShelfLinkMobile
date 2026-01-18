@@ -17,8 +17,7 @@ import { useTranslation } from 'react-i18next';
 import '../../i18n';
 import Header from '../../components/Header';
 import { safePush } from '../../utils/navigation';
-import { useGetInvoiceByOrderId, useGeneratePdf } from '../../services/invoice-service/invoice.query';
-import { PaymentStatus, PaymentMethod } from '../../services/invoice-service/invoice.type';
+import { useGetInvoiceByOrderId, useGeneratePdf, useValidatePayment } from '../../services/invoice-service/invoice.query';
 import * as FileSystem from 'expo-file-system';
 import * as Linking from 'expo-linking';
 import * as Sharing from 'expo-sharing';
@@ -42,7 +41,7 @@ const Tab = ({ label, isActive, onPress }: TabProps) => (
 );
 
 export default function InvoiceScreen() {
-  const { orderId, organizationId } = useLocalSearchParams();
+  const { invoiceId, invoice: invoiceParam, orderId, organizationId } = useLocalSearchParams();
   const { t } = useTranslation();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'details' | 'payments'>('details');
@@ -50,16 +49,43 @@ export default function InvoiceScreen() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
   
-  const { data: invoiceData, isLoading, error, refetch } = useGetInvoiceByOrderId(
+  // Parse invoice data from params if available
+  const parsedInvoice = invoiceParam ? JSON.parse(invoiceParam as string) : null;
+  
+  // Use the parsed invoice data directly if available, otherwise fetch by orderId
+  const { data: fetchedInvoiceData, isLoading: isFetching, error: fetchError, refetch } = useGetInvoiceByOrderId(
     organizationId as string,
     orderId as string
   );
-  console.log(invoiceData, "invoiceData")
+  
+  // Use parsed invoice data if available, otherwise use fetched data
+  const invoiceData = parsedInvoice || fetchedInvoiceData;
+  const isLoading = parsedInvoice ? false : isFetching;
+  const error = parsedInvoice ? null : fetchError;
+  
+  console.log('InvoiceScreen - Parameters:', { invoiceId, orderId, organizationId });
+  console.log('InvoiceScreen - Parsed invoice:', parsedInvoice);
+  console.log('InvoiceScreen - Fetched invoice:', fetchedInvoiceData);
+  console.log('InvoiceScreen - Final invoice data:', invoiceData);
+  console.log('InvoiceScreen - PDF Generation params:', {
+    organizationId: invoiceData?.organizationId || organizationId,
+    invoiceId: invoiceData?.id || invoiceId
+  });
 
   const { data: pdfData, isLoading: isPdfLoading, refetch: generatePdf } = useGeneratePdf(
-    organizationId as string,
-    invoiceData?.id || ''
+    invoiceData?.organizationId || organizationId as string,
+    invoiceData?.id || invoiceId as string
   );
+  
+  console.log('InvoiceScreen - PDF Hook Status:', {
+    pdfData,
+    isPdfLoading,
+    organizationId: invoiceData?.organizationId || organizationId,
+    invoiceId: invoiceData?.id || invoiceId
+  });
+
+  // Payment validation mutation
+  const { mutate: validatePayment, isPending: isValidationLoading } = useValidatePayment();
 
   // Get notification context for auto-updates
   const { lastPayload } = useNotification();
@@ -71,10 +97,12 @@ export default function InvoiceScreen() {
       const isInvoiceUpdate = lastPayload.table === 'invoices';
       const isOrderUpdate = lastPayload.table === 'orders';
 
+      // Use invoice's order ID or the passed orderId
+      const currentOrderId = invoiceData?.orderId || orderId;
       
       // Refetch if it's an invoice update for this order, or an order update for this order
-      const shouldRefetch = (isInvoiceUpdate && payloadData?.orderId === orderId) || 
-                           (isOrderUpdate && payloadData?.id === orderId);
+      const shouldRefetch = (isInvoiceUpdate && payloadData?.orderId === currentOrderId) || 
+                           (isOrderUpdate && payloadData?.id === currentOrderId);
       
       if (shouldRefetch) {
         console.log('InvoiceScreen - Refetching invoice data due to relevant update');
@@ -83,22 +111,24 @@ export default function InvoiceScreen() {
         console.log('InvoiceScreen - Update not relevant to this invoice, skipping refetch');
       }
     }
-  }, [lastPayload, refetch, orderId, organizationId, invoiceData?.id]);
+  }, [lastPayload, refetch, orderId, invoiceData?.orderId]);
 
   // Debug logging for invoice data updates
   useEffect(() => {
     console.log('InvoiceScreen - invoiceData updated:', {
+      invoiceId: invoiceId,
       orderId: orderId,
       organizationId: organizationId,
-      invoiceId: invoiceData?.id,
+      invoiceDataId: invoiceData?.id,
       invoiceNumber: invoiceData?.invoiceNumber,
       status: invoiceData?.status,
       paymentStatus: invoiceData?.paymentStatus,
       isLoading,
       error: error?.message,
-      lastPayload: lastPayload?.new?.id
+      lastPayload: lastPayload?.new?.id,
+      hasParsedInvoice: !!parsedInvoice
     });
-  }, [invoiceData, isLoading, error, orderId, organizationId, lastPayload]);
+  }, [invoiceData, isLoading, error, invoiceId, orderId, organizationId, lastPayload, parsedInvoice]);
 
   // Request storage permissions using MediaLibrary
   const requestStoragePermissions = async (): Promise<boolean> => {
@@ -207,7 +237,24 @@ export default function InvoiceScreen() {
         throw new Error(`PDF generation failed: ${response.error.message || 'Unknown error'}`);
       }
 
-      console.log('PDF blob received, size:', response.data.size, 'bytes');
+      console.log('PDF data received:', response.data);
+      console.log('PDF data type:', typeof response.data);
+      console.log('PDF data constructor:', response.data?.constructor?.name);
+
+      // Check if we have a PDF URL
+      if (response.data?.pdfUrl) {
+        // Download the PDF from the URL
+        const downloadResult = await FileSystem.downloadAsync(
+          response.data.pdfUrl,
+          FileSystem.documentDirectory + `invoice_${invoiceData.invoiceNumber}_${Date.now()}.pdf`
+        );
+        
+        console.log('PDF downloaded to:', downloadResult.uri);
+        
+        // Share the downloaded PDF
+        await sharePdf(downloadResult.uri);
+        return;
+      }
 
       // Request permissions
       const hasPermission = await requestStoragePermissions();
@@ -220,10 +267,46 @@ export default function InvoiceScreen() {
         return;
       }
 
-      // Convert Blob to Base64
-      const base64Pdf = await blobToBase64(response.data);
+      // Handle different PDF response formats
+      let base64Pdf: string;
       
-      // Create filename with timestamp
+      if (response.data instanceof Blob) {
+        console.log('PDF blob received, size:', response.data.size, 'bytes');
+        base64Pdf = await blobToBase64(response.data);
+      } else if (typeof response.data === 'string') {
+        // If the response is a base64 string
+        console.log('PDF base64 string received, length:', response.data.length);
+        base64Pdf = response.data;
+      } else if (response.data && typeof response.data === 'object' && response.data.data) {
+        // If the response has a nested data property
+        console.log('PDF nested data received');
+        if (response.data.data instanceof Blob) {
+          base64Pdf = await blobToBase64(response.data.data);
+        } else if (typeof response.data.data === 'string') {
+          base64Pdf = response.data.data;
+        } else {
+          throw new Error('Invalid nested PDF data format');
+        }
+      } else {
+        console.log('Raw PDF data received, attempting to save directly');
+        // If it's raw binary data, try to save it directly
+        const timestamp = new Date().getTime();
+        const fileName = `invoice_${invoiceData.invoiceNumber}_${timestamp}.pdf`;
+        const fileUri = FileSystem.documentDirectory + fileName;
+        
+        // Write the raw data to file
+        await FileSystem.writeAsStringAsync(fileUri, response.data, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        
+        console.log('PDF saved successfully to:', fileUri);
+        
+        // Share the saved PDF
+        await sharePdf(fileUri);
+        return;
+      }
+
+      // Create filename with timestamp for base64 data
       const timestamp = new Date().getTime();
       const fileName = `invoice_${invoiceData.invoiceNumber}_${timestamp}`;
       const fileUri = FileSystem.documentDirectory + fileName + '.pdf';
@@ -287,6 +370,55 @@ export default function InvoiceScreen() {
   // Save PDF function - uses the new approach
   const handleSavePdf = async () => {
     await handleSaveAndSharePdf();
+  };
+
+  // Payment validation functions
+  const handleValidatePayment = (paymentId: string, validated: boolean) => {
+    if (!paymentId) return;
+
+    const actionText = validated ? t('approve') : t('reject');
+    const confirmText = validated ? t('Are you sure you want to approve this payment?') : t('Are you sure you want to reject this payment?');
+
+    Alert.alert(
+      t('Confirm Action'),
+      confirmText,
+      [
+        {
+          text: t('Cancel'),
+          style: 'cancel',
+        },
+        {
+          text: actionText,
+          style: validated ? 'default' : 'destructive',
+          onPress: () => {
+            validatePayment({
+              organizationId: invoiceData?.organizationId || organizationId as string,
+              invoiceId: invoiceData?.id || invoiceId as string,
+              paymentId,
+              validationStatus: validated ? 'approved' : 'rejected'
+            }, {
+              onSuccess: () => {
+                Alert.alert(
+                  t('Success'),
+                  validated 
+                    ? t('Payment approved successfully!')
+                    : t('Payment rejected successfully!'),
+                  [{ text: t('OK'), style: 'default' }]
+                );
+              },
+              onError: (error) => {
+                console.error('Payment validation error:', error);
+                Alert.alert(
+                  t('Error'),
+                  t('Failed to validate payment. Please try again.'),
+                  [{ text: t('OK'), style: 'default' }]
+                );
+              }
+            });
+          }
+        }
+      ]
+    );
   };
 
 
@@ -663,18 +795,14 @@ export default function InvoiceScreen() {
     </ScrollView>
   );
 
-  const getPaymentStatusText = (status: PaymentStatus | string) => {
+  const getPaymentStatusText = (status: string) => {
     switch (status) {
-      case PaymentStatus.PAID:
       case 'paid':
         return t("Paid");
-      case PaymentStatus.UNPAID:
       case 'unpaid':
         return t("Unpaid");
-      case PaymentStatus.PARTIALLY_PAID:
       case 'partially_paid':
         return t("Partially Paid");
-      case PaymentStatus.OVERPAID:
       case 'overpaid':
         return t("Overpaid");
       default:
@@ -682,18 +810,14 @@ export default function InvoiceScreen() {
     }
   };
 
-  const getPaymentStatusColor = (status: PaymentStatus | string) => {
+  const getPaymentStatusColor = (status: string) => {
     switch (status) {
-      case PaymentStatus.PAID:
       case 'paid':
         return '#059669';
-      case PaymentStatus.UNPAID:
       case 'unpaid':
         return '#ef4444';
-      case PaymentStatus.PARTIALLY_PAID:
       case 'partially_paid':
         return '#f59e0b';
-      case PaymentStatus.OVERPAID:
       case 'overpaid':
         return '#8b5cf6';
       default:
@@ -701,23 +825,49 @@ export default function InvoiceScreen() {
     }
   };
 
-  const getPaymentMethodText = (method: PaymentMethod | null) => {
+  const getPaymentMethodText = (method: string | null) => {
     if (!method) return t("Not specified");
     switch (method) {
-      case PaymentMethod.CASH:
+      case 'cash':
         return t("Cash");
-      case PaymentMethod.CARD:
+      case 'card':
         return t("Card");
-      case PaymentMethod.BANK_TRANSFER:
+      case 'bank_transfer':
         return t("Bank Transfer");
-      case PaymentMethod.CHECK:
+      case 'check':
         return t("Check");
-      case PaymentMethod.MOBILE_PAYMENT:
+      case 'mobile_payment':
         return t("Mobile Payment");
-      case PaymentMethod.CRYPTO:
+      case 'crypto':
         return t("Cryptocurrency");
       default:
         return t("Unknown");
+    }
+  };
+
+  const getValidationStatusText = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return t("Pending Validation");
+      case 'approved':
+        return t("Approved");
+      case 'rejected':
+        return t("Rejected");
+      default:
+        return t("Unknown");
+    }
+  };
+
+  const getValidationStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return '#f59e0b';
+      case 'approved':
+        return '#059669';
+      case 'rejected':
+        return '#ef4444';
+      default:
+        return '#6b7280';
     }
   };
 
@@ -749,6 +899,45 @@ export default function InvoiceScreen() {
               </View>
             </View>
           </View>
+          {/* Payment Validation Summary */}
+          {invoiceData.payments && invoiceData.payments.length > 0 && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>{t("Validation Status")}</Text>
+              <View style={styles.statusContainer}>
+                {(() => {
+                  const pendingPayments = invoiceData.payments.filter(p => p.validationStatus === 'pending').length;
+                  const validatedPayments = invoiceData.payments.filter(p => p.validationStatus === 'approved').length;
+                  const rejectedPayments = invoiceData.payments.filter(p => p.validationStatus === 'rejected').length;
+                  
+                  if (pendingPayments > 0) {
+                    return (
+                      <View style={[styles.statusBadge, { backgroundColor: '#f59e0b20' }]}>
+                        <Text style={[styles.statusText, { color: '#f59e0b' }]}>
+                          {pendingPayments} {t("Pending")}
+                        </Text>
+                      </View>
+                    );
+                  } else if (rejectedPayments > 0) {
+                    return (
+                      <View style={[styles.statusBadge, { backgroundColor: '#ef444420' }]}>
+                        <Text style={[styles.statusText, { color: '#ef4444' }]}>
+                          {rejectedPayments} {t("Rejected")}
+                        </Text>
+                      </View>
+                    );
+                  } else {
+                    return (
+                      <View style={[styles.statusBadge, { backgroundColor: '#05966920' }]}>
+                        <Text style={[styles.statusText, { color: '#059669' }]}>
+                          {validatedPayments} {t("Approved")}
+                        </Text>
+                      </View>
+                    );
+                  }
+                })()}
+              </View>
+            </View>
+          )}
         </View>
       </View>
 
@@ -760,7 +949,14 @@ export default function InvoiceScreen() {
             <View key={payment.id} style={styles.paymentContainer}>
               <View style={styles.paymentHeader}>
                 <Text style={styles.paymentAmount}>{payment.paymentAmount} {t("DT")}</Text>
-                <Text style={styles.paymentMethod}>{getPaymentMethodText(payment.paymentMethod)}</Text>
+                <View style={styles.paymentMethodContainer}>
+                  <Text style={styles.paymentMethod}>{getPaymentMethodText(payment.paymentMethod)}</Text>
+                  <View style={[styles.validationStatusBadge, { backgroundColor: getValidationStatusColor(payment.validationStatus) + '20' }]}>
+                    <Text style={[styles.validationStatusText, { color: getValidationStatusColor(payment.validationStatus) }]}>
+                      {getValidationStatusText(payment.validationStatus)}
+                    </Text>
+                  </View>
+                </View>
               </View>
               <View style={styles.paymentDetails}>
                 <Text style={styles.paymentDate}>
@@ -772,6 +968,31 @@ export default function InvoiceScreen() {
                   </Text>
                 )}
               </View>
+              
+              {/* Validation Actions - Only show for pending payments */}
+              {payment.validationStatus === 'pending' && (
+                <View style={styles.validationActionsContainer}>
+                  <TouchableOpacity
+                    style={[styles.validationButton, styles.approveButton]}
+                    onPress={() => handleValidatePayment(payment.id, true)}
+                    disabled={isValidationLoading}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="check" size={16} color="#fff" />
+                    <Text style={styles.validationButtonText}>{t("Approve")}</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.validationButton, styles.rejectButton]}
+                    onPress={() => handleValidatePayment(payment.id, false)}
+                    disabled={isValidationLoading}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="x" size={16} color="#fff" />
+                    <Text style={styles.validationButtonText}>{t("Reject")}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           ))}
         </View>
@@ -1303,5 +1524,51 @@ const styles = StyleSheet.create({
   },
   paymentButtonSpacer: {
     width: 36,
+  },
+  // Payment validation styles
+  paymentMethodContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  validationStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  validationStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  validationActionsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  validationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flex: 1,
+    justifyContent: 'center',
+    gap: 6,
+  },
+  approveButton: {
+    backgroundColor: '#059669',
+  },
+  rejectButton: {
+    backgroundColor: '#ef4444',
+  },
+  validationButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

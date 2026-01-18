@@ -1,10 +1,25 @@
 import { Stack } from 'expo-router'
 import React from 'react'
-import { StatusBar } from 'react-native'
+import { StatusBar, View } from 'react-native'
+import BottomNavigation from '../../components/BottomNavigation'
+import { usePathname } from 'expo-router'
+
 export default function AppLayout() {
+  const pathname = usePathname()
+  
+  // Define routes that should show the bottom navigation
+  const showBottomNav = [
+    '/(app)/home',
+    '/(app)/discover', 
+    '/(app)/orders',
+    '/(app)/invoices',
+    '/(app)/payments',
+    '/(app)/account'
+  ].some(route => pathname.includes(route.replace('/(app)/', '')))
+
   return (
-    <>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+    <View style={{ flex: 1 }}>
+      <StatusBar barStyle="dark-content" backgroundColor="#1A2A4F " />
 
       <Stack>
         <Stack.Screen
@@ -28,6 +43,12 @@ export default function AppLayout() {
         />
         <Stack.Screen
           name="home"
+          options={{
+            headerShown: false
+          }}
+        />
+        <Stack.Screen
+          name="discover"
           options={{
             headerShown: false
           }}
@@ -135,8 +156,24 @@ export default function AppLayout() {
         
           }}
         />
+
+        <Stack.Screen
+          name="invoices"
+          options={{
+            headerShown: false
+          }}
+        />
+
+        <Stack.Screen
+          name="payments"
+          options={{
+            headerShown: false
+          }}
+        />
       </Stack>
 
-    </>
+      {/* Global Bottom Navigation */}
+      {showBottomNav && <BottomNavigation />}
+    </View>
   )
 } 

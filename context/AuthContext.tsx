@@ -7,6 +7,7 @@ import React from 'react'
 type AuthContextType = {
   user: User | null
   setUser: (user: User | null) => void
+  updateUser: (userData: Partial<User>) => Promise<void>
   loading: boolean
   isAuthenticated: boolean
   logout: () => Promise<void>
@@ -89,9 +90,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(userData)
   }, [])
 
+  // Update user data and persist to SecureStore
+  const updateUser = useCallback(async (userData: Partial<User>) => {
+    if (!user) {
+      console.error("Cannot update user: no current user")
+      return
+    }
+
+    try {
+      const updatedUser = { ...user, ...userData }
+      console.log("AuthContext - Updating user from:", user)
+      console.log("AuthContext - Updating user with data:", userData)
+      console.log("AuthContext - Updated user result:", updatedUser)
+      
+      setUser(updatedUser)
+      
+      // Persist the updated user data to SecureStore
+      await SecureStore.setItemAsync('user', JSON.stringify(updatedUser))
+      console.log("AuthContext - User updated and persisted to SecureStore")
+    } catch (error) {
+      console.error("Failed to update user:", error)
+      throw error
+    }
+  }, [user])
+
   const value: AuthContextType = {
     user,
     setUser: setUserWithLogging,
+    updateUser,
     loading,
     isAuthenticated: !!user,
     login,

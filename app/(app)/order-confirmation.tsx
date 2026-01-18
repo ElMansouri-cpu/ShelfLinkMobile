@@ -34,7 +34,14 @@ export default function OrderConfirmationScreen() {
   const {user} = useAuth()
 
   const items = typeof itemsParam === "string" ? JSON.parse(itemsParam) : []
-  const store = typeof storeParam === "string" ? JSON.parse(storeParam) : null
+  const storeData = typeof storeParam === "string" ? JSON.parse(storeParam) : null
+  const store = storeData?.organization || storeData
+  
+  // Debug logging for data parsing
+  console.log('OrderConfirmation - storeParam:', storeParam)
+  console.log('OrderConfirmation - storeData:', storeData)
+  console.log('OrderConfirmation - store:', store)
+  
   const client = typeof clientParam === "string" ? JSON.parse(clientParam) : null
   const total = typeof totalParam === "string" ? JSON.parse(totalParam) : null
   const totalProducts = typeof totalProductsParam === "string" ? JSON.parse(totalProductsParam) : null
@@ -55,8 +62,13 @@ export default function OrderConfirmationScreen() {
       useNativeDriver: true,
     }).start()
 
+    // Debug logging
+    console.log('OrderConfirmation - Store data:', store)
+    console.log('OrderConfirmation - Store ID:', store?.id)
+    console.log('OrderConfirmation - Store organization ID:', store?.organization?.id)
+
     setOrderPayload({
-      organizationId: store?.organization?.id,
+      organizationId: store?.id,
       retailerId: user?.id,
       createdBy: user?.id,
       orderType: orderType,
@@ -85,6 +97,17 @@ export default function OrderConfirmationScreen() {
     try {
       setIsConfirming(true)
 
+      // Debug logging before API call
+      console.log('OrderConfirmation - Creating order with payload:', orderPayload)
+      console.log('OrderConfirmation - API URL:', `/organization/${store?.id}/orders/`)
+      console.log('OrderConfirmation - Organization ID being sent:', orderPayload.organizationId)
+
+      // Validate organization ID before making API call
+      if (!orderPayload.organizationId) {
+        console.error('OrderConfirmation - Organization ID is undefined!')
+        throw new Error('Organization ID is required to create order')
+      }
+
       // Button animation
       Animated.sequence([
         Animated.timing(scaleAnim, {
@@ -98,7 +121,7 @@ export default function OrderConfirmationScreen() {
           useNativeDriver: true,
         }),
       ]).start()
-      const response = await api.post(`/organization/${store?.organization?.id}/orders/`, orderPayload)
+      const response = await api.post(`/organization/${store?.id}/orders/`, orderPayload)
 
       // Success animation
       Animated.timing(fadeAnim, {
@@ -137,10 +160,44 @@ export default function OrderConfirmationScreen() {
   }
 
   const handleModify = () => {
+    // Debug logging first
+    console.log('OrderConfirmation - handleModify - storeParam:', storeParam)
+    console.log('OrderConfirmation - handleModify - storeData:', storeData)
+    console.log('OrderConfirmation - handleModify - store:', store)
+    
+    // Ensure we pass the correct store data structure that cart expects
+    // Cart expects: { organization: { id, name, logoUrl, etc. } }
+    let storeForCart
+    
+    if (storeData && storeData.organization) {
+      // If storeData already has the correct structure
+      storeForCart = storeData
+    } else if (storeData) {
+      // If storeData exists but doesn't have organization, wrap it
+      storeForCart = { organization: storeData }
+    } else if (store) {
+      // If only store exists, wrap it
+      storeForCart = { organization: store }
+    } else {
+      // Fallback - create a minimal structure
+      console.error('OrderConfirmation - No store data available!')
+      storeForCart = { 
+        organization: { 
+          id: 'unknown', 
+          name: 'Store', 
+          logoUrl: null,
+          location: { address: 'Unknown location' }
+        } 
+      }
+    }
+    
+    console.log('OrderConfirmation - handleModify - storeForCart:', storeForCart)
+    console.log('OrderConfirmation - handleModify - storeForCart.organization:', storeForCart.organization)
+    
     router.replace({
       pathname: "/(app)/cart/cart",
       params: {
-        store: JSON.stringify(store),
+        store: JSON.stringify(storeForCart),
       },
     })
   }

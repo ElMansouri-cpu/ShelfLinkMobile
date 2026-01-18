@@ -51,9 +51,15 @@ jspm_packages/
 
 # IDE files
 .vscode/
+.vscode
+**/.vscode/
+**/.vscode
 .idea/
 *.swp
 *.swo
+
+# Example files (not needed for builds)
+examples/
 
 # OS generated files
 .DS_Store

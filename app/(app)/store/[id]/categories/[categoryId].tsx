@@ -40,7 +40,7 @@ export default function CategoryScreen() {
     {
       id: "promotions",
       name: t("Promotions"),
-      imageUrl: "https://via.placeholder.com/32x32/10b981/ffffff?text=🎯"
+      imageUrl: "https://via.placeholder.com/32x32/48C6A8/ffffff?text=🎯"
     },
     ...parsedCategories
   ]
@@ -356,13 +356,13 @@ export default function CategoryScreen() {
                   key={category.id}
                   style={{
                     marginRight: 12,
-                    backgroundColor: activeTab === category.id ? "#10b981" : "white",
+                    backgroundColor: activeTab === category.id ? "#48C6A8" : "white",
                     borderRadius: 12,
                     padding: 12,
                     flexDirection: "row",
                     alignItems: "center",
                     borderWidth: 1,
-                    borderColor: activeTab === category.id ? "#10b981" : "#e5e7eb",
+                    borderColor: activeTab === category.id ? "#48C6A8" : "#e5e7eb",
                     shadowColor: "#000",
                     shadowOffset: { width: 0, height: 1 },
                     shadowOpacity: activeTab === category.id ? 0.1 : 0,
@@ -425,13 +425,13 @@ export default function CategoryScreen() {
                <TouchableOpacity
                  style={{
                    marginRight: 12,
-                   backgroundColor: selectedBrand === "" ? "#10b981" : "white",
+                   backgroundColor: selectedBrand === "" ? "#48C6A8" : "white",
                    borderRadius: 12,
                    padding: 12,
                    flexDirection: "row",
                    alignItems: "center",
                    borderWidth: 1,
-                   borderColor: selectedBrand === "" ? "#10b981" : "#e5e7eb",
+                   borderColor: selectedBrand === "" ? "#48C6A8" : "#e5e7eb",
                    shadowColor: "#000",
                    shadowOffset: { width: 0, height: 1 },
                    shadowOpacity: selectedBrand === "" ? 0.1 : 0,
@@ -455,13 +455,13 @@ export default function CategoryScreen() {
                    key={brand.id}
                    style={{
                      marginRight: 12,
-                     backgroundColor: selectedBrand === brand.id ? "#10b981" : "white",
+                     backgroundColor: selectedBrand === brand.id ? "#48C6A8" : "white",
                      borderRadius: 12,
                      padding: 12,
                      flexDirection: "row",
                      alignItems: "center",
                      borderWidth: 1,
-                     borderColor: selectedBrand === brand.id ? "#10b981" : "#e5e7eb",
+                     borderColor: selectedBrand === brand.id ? "#48C6A8" : "#e5e7eb",
                      shadowColor: "#000",
                    shadowOffset: { width: 0, height: 1 },
                    shadowOpacity: selectedBrand === brand.id ? 0.1 : 0,
@@ -504,7 +504,7 @@ export default function CategoryScreen() {
                            {/* Loading indicator for promotional products */}
               {isPromotionsCategory && promotionalProductsLoading && (
                 <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                  <ActivityIndicator size="large" color="#10b981" />
+                  <ActivityIndicator size="large" color="#48C6A8" />
                   <Text style={{ marginTop: 8, color: '#6b7280' }}>{t("Loading promotional products...")}</Text>
                 </View>
               )}
@@ -512,7 +512,7 @@ export default function CategoryScreen() {
               {/* Loading indicator for brand products */}
               {selectedBrand && brandProductsLoading && !isPromotionsCategory && (
                 <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                  <ActivityIndicator size="large" color="#10b981" />
+                  <ActivityIndicator size="large" color="#48C6A8" />
                   <Text style={{ marginTop: 8, color: '#6b7280' }}>{t("Loading brand products...")}</Text>
                 </View>
               )}
@@ -612,7 +612,7 @@ export default function CategoryScreen() {
                        {(isPromotionsCategory ? promotionalIsFetchingNextPage :
                          selectedBrand ? brandIsFetchingNextPage : isFetchingNextPage) && (
                          <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                           <ActivityIndicator size="large" color="#10b981" />
+                           <ActivityIndicator size="large" color="#48C6A8" />
                            <Text style={{ marginTop: 8, color: '#6b7280' }}>{t("Loading more products...")}</Text>
                          </View>
                        )}
@@ -648,14 +648,14 @@ export default function CategoryScreen() {
         >
           <TouchableOpacity
             style={{
-              backgroundColor: "#10b981",
+              backgroundColor: "#48C6A8",
               borderRadius: 16,
               paddingVertical: 16,
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
               paddingHorizontal: 20,
-              shadowColor: "#10b981",
+              shadowColor: "#48C6A8",
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.3,
               shadowRadius: 8,

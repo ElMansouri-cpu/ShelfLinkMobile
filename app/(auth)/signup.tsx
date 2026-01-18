@@ -28,7 +28,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useTranslation } from 'react-i18next'
 import '../../i18n'
-import { useOTPAuthentication, useOTPVerification } from '../../services/user-service/user.query'
+import { useSignupAuthentication, useSignupVerification } from '../../services/user-service/user.query'
 import { setAuthToken } from '../../lib/api'
 import * as SecureStore from "expo-secure-store"
 import { useAuth } from '../../hooks/useAuth'
@@ -52,7 +52,7 @@ const InputContainer = ({ children, error }: { children: React.ReactNode; error?
   </View>
 )
 
-export default function Login() {
+export default function Signup() {
   const router = useRouter()
   const [phoneNumber, setPhoneNumber] = useState('')
   const [verificationCode, setVerificationCode] = useState('')
@@ -77,8 +77,8 @@ export default function Login() {
   const hideAlert = () => {
     setAlert(prev => ({ ...prev, visible: false }))
   }
-  const { mutate: OTPAuthentication } = useOTPAuthentication()
-  const { mutate: OTPVerification } = useOTPVerification()
+  const { mutate: SignupAuthentication } = useSignupAuthentication()
+  const { mutate: SignupVerification } = useSignupVerification()
   const { setUser } = useAuth()
 
   // For OTP input refs
@@ -179,10 +179,10 @@ export default function Login() {
     
     try {
       let formattedPhone = phoneNumber.replace(/\D/g, '')
-      if (!formattedPhone.startsWith('216')) {
-        formattedPhone = `216${formattedPhone}`
+      if (!formattedPhone.startsWith('+216')) {
+        formattedPhone = `+216${formattedPhone}`
       }
-      OTPAuthentication(formattedPhone, {
+      SignupAuthentication(formattedPhone, {
         onSuccess: (data) => {
           setIsCodeSent(true)
           setPhoneError('')
@@ -191,13 +191,13 @@ export default function Login() {
           setLoading(false)
         },
         onError: (error) => {
-          console.error("OTP send failed:", error)
-          showAlert(t('Sign in failed'), error.message || t('otpSendFailed'), 'error')
+          console.error("Signup OTP send failed:", error)
+          showAlert(t('Sign up failed'), error.message || t('otpSendFailed'), 'error')
           setLoading(false)
         }
       })
     } catch (error) {
-      showAlert(t('Sign in failed'), t('unexpectedError'), 'error')
+      showAlert(t('Sign up failed'), t('unexpectedError'), 'error')
       setLoading(false)
     }
   }
@@ -221,9 +221,9 @@ export default function Login() {
     try {
       let formattedPhone = phoneNumber.replace(/\D/g, '')
       if (!formattedPhone.startsWith('+216')) {
-        formattedPhone = `216${formattedPhone}`
+        formattedPhone = `+216${formattedPhone}`
       }
-      OTPVerification({
+      SignupVerification({
         phone: formattedPhone,
         code: codeToVerify,
       }, {
@@ -235,7 +235,7 @@ export default function Login() {
             await SecureStore.setItemAsync("user", JSON.stringify(data?.user))
             setAuthToken(data?.accessToken)
             setUser(data?.user)
-            showAlert(t('Success'), t('loginSuccess'), 'success')
+            showAlert(t('Success'), t('signupSuccess'), 'success')
             setTimeout(() => {
               hideAlert()
               router.replace('/(app)/home')
@@ -243,8 +243,8 @@ export default function Login() {
           }
         },
         onError: (error) => {
-          console.error("OTP verification failed:", error)
-          showAlert(t('Sign in failed'), t('verificationFailed'), 'error')
+          console.error("Signup verification failed:", error)
+          showAlert(t('Sign up failed'), t('verificationFailed'), 'error')
           setCodeError(t('invalidCode'))
           setLoading(false)
           // Clear OTP inputs
@@ -253,7 +253,7 @@ export default function Login() {
         }
       })
     } catch (error) {
-      showAlert(t('Sign in failed'), t('unexpectedError'), 'error')
+      showAlert(t('Sign up failed'), t('unexpectedError'), 'error')
       setLoading(false)
     }
   }
@@ -272,6 +272,7 @@ export default function Login() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#fafafa]">
+      <StatusBar barStyle="dark-content" />
       <CustomAlert
         visible={alert.visible}
         title={alert.title}
@@ -302,7 +303,7 @@ export default function Login() {
               {t('welcome')}
             </Text>
             <Text className="text-center text-gray-600 mb-8 text-base">
-              {isCodeSent ? t('verificationCode') : t('signInWithPhone')}
+              {isCodeSent ? t('verificationCode') : t('signUpWithPhone')}
             </Text>
 
             <Animated.View
@@ -312,7 +313,7 @@ export default function Login() {
             >
               {!isCodeSent ? (
                 <>
-                  <View className="mb-8 ">
+                  <View className="mb-8">
                     <Text className="text-sm mb-2 text-gray-700 font-medium">{t('phoneNumber')}</Text>
                     <InputContainer error={phoneError}>
                       <View className="flex-row items-center">
@@ -355,13 +356,13 @@ export default function Login() {
                   </TouchableOpacity>
 
                   <View className="items-center mt-4">
-                    <Text className="text-gray-600 text-sm mb-2">{t('Don\'t have an account?')}</Text>
+                    <Text className="text-gray-600 text-sm mb-2">{t('Do you have an account?')}</Text>
                     <TouchableOpacity
-                      onPress={() => router.push('/(auth)/signup')}
+                      onPress={() => router.push('/(auth)/login')}
                       className="py-2"
                     >
                       <Text className="text-[#00162e] font-semibold text-base">
-                        {t('Sign-up')}
+                        {t('Sign-in')}
                       </Text>
                     </TouchableOpacity>
                   </View>

@@ -141,7 +141,7 @@ const ProductCard = ({ product, onPress, onAddToCart, onRemoveFromCart, quantity
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      backgroundColor: "#10b981",
+                      backgroundColor: "#1A2A4F",
                       borderRadius: 20,
                       overflow: "hidden",
                       height: 32,
@@ -168,7 +168,7 @@ const ProductCard = ({ product, onPress, onAddToCart, onRemoveFromCart, quantity
                     style={{
                       backgroundColor: "#f0fdf4",
                       borderWidth: 1,
-                      borderColor: "#10b981",
+                      borderColor: "#1A2A4F",
                       borderRadius: 20,
                       width: 32,
                       height: 32,
@@ -177,7 +177,7 @@ const ProductCard = ({ product, onPress, onAddToCart, onRemoveFromCart, quantity
                     }}
                     onPress={onAddToCart}
                   >
-                    <Feather name="plus" size={16} color="#10b981" />
+                    <Feather name="plus" size={16} color="#1A2A4F" />
                   </TouchableOpacity>
                 )}
               </View>

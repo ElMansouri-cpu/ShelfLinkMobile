@@ -15,6 +15,11 @@ export default function Index() {
   if (!isAuthenticated || !user) {
     return <Redirect href="/(auth)/login" />
   } else {
-    return <Redirect href="/(app)/home" />
+    // Check if user needs onboarding
+    if (!user.isOnboarded) {
+      return <Redirect href="/(app)/onboarding/onboarding-stepper" />
+    } else {
+      return <Redirect href="/(app)/home" />
+    }
   }
 } 

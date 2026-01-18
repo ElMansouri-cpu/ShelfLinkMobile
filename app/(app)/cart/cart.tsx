@@ -167,7 +167,7 @@ export default function CartScreen() {
           style={styles.clearButton}
           onPress={handleClearCart}
         >
-          <Text style={styles.clearButtonText}>Clear</Text>
+          <Text style={styles.clearButtonText}>{t("Clear")}</Text>
         </TouchableOpacity>
       </Animated.View> */}
 

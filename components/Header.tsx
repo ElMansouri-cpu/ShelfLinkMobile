@@ -2,33 +2,41 @@ import React from 'react'
 import { View, Text, TouchableOpacity, StatusBar, Animated } from 'react-native'
 import { Feather } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-const Header = ({ title, onBack, onSearch, scrollY, opacity, clearCart, onSave }: {
+import { useRouter } from 'expo-router';
+
+const Header = ({ title, onBack, onSearch, scrollY, opacity, clearCart, onSave, showBackButton = true }: {
   title: string,
   onBack?: () => void,
   onSearch?: () => void,
-  scrollY: Animated.Value,
+  scrollY?: Animated.Value,
   clearCart?: () => void,
   opacity?: any,
-  onSave?: () => void
+  onSave?: () => void,
+  showBackButton?: boolean
 }) => {
   const { t } = useTranslation();
+  const router = useRouter();
 
-  const headerOpacity = scrollY.interpolate({
+  const headerOpacity = scrollY ? scrollY.interpolate({
     inputRange: [0, 20],
     outputRange: [0, 1],
     extrapolate: 'clamp'
-  });
+  }) : new Animated.Value(1);
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    } else {
+      router.back();
+    }
+  };
 
   return (
     <View>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle="light-content" backgroundColor="#1A2A4F" />
       <Animated.View
         style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: 'white',
+          backgroundColor: '#1A2A4F',
           zIndex: 10,
           opacity: opacity ? opacity : headerOpacity,
           paddingTop: 0,
@@ -45,18 +53,23 @@ const Header = ({ title, onBack, onSearch, scrollY, opacity, clearCart, onSave }
             height: 56
           }}
         >
-          <TouchableOpacity    style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                backgroundColor: "#f3f4f6",
-                alignItems: "center",
-                justifyContent: "center",
-              }} onPress={() => { onBack && onBack(); }}>
-            <Feather name="arrow-left" size={22} color="#111" />
-          </TouchableOpacity>
+          {showBackButton && (
+            <TouchableOpacity style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: "rgba(255, 255, 255, 0.2)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }} onPress={handleBack}>
+              <Feather name="arrow-left" size={22} color="white" />
+            </TouchableOpacity>
+          )}
+          {!showBackButton && (
+            <View style={{ width: 40 }} />
+          )}
 
-          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111' }}>
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: 'white' }}>
             {t(title)}
           </Text>
 
@@ -67,7 +80,7 @@ const Header = ({ title, onBack, onSearch, scrollY, opacity, clearCart, onSave }
           )}
           {onSave && (
                <TouchableOpacity onPress={()=>{onSave && onSave()}}>
-               <Text className="text-[#00A67E] font-medium">Save</Text>
+               <Text style={{ color: '#48C6A8', fontSize: 16, fontWeight: 'medium' }}>Save</Text>
              </TouchableOpacity>
           )}
 
@@ -76,11 +89,11 @@ const Header = ({ title, onBack, onSearch, scrollY, opacity, clearCart, onSave }
               width: 40,
               height: 40,
               borderRadius: 20,
-              backgroundColor: "#f3f4f6",
+              backgroundColor: "rgba(255, 255, 255, 0.2)",
               alignItems: "center",
               justifyContent: "center",
             }} onPress={onSearch}>
-              <Feather name="search" size={22} color="#111" />
+              <Feather name="search" size={22} color="white" />
             </TouchableOpacity>
           ) : !clearCart && !onSave && (
             <View style={{ width: 24 }} />

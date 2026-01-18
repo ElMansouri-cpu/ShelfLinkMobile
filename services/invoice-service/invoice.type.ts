@@ -1,12 +1,5 @@
-// Invoice Domain Types
-import { Order } from "../order-service/orders.type";
-import { IUser } from "../user-service/user.type";
-import { IOrganization } from "../store-service/store.types";
-
-export interface IInvoice {
+export interface Invoice {
   id: string;
-  createdAt: string;
-  updatedAt: string;
   invoiceNumber: string;
   invoiceDate: string;
   totalAmount: string;
@@ -14,129 +7,171 @@ export interface IInvoice {
   taxAmount: string;
   discountAmount: string;
   shippingAmount: string;
-  status: InvoiceStatus;
-  type: InvoiceType;
-  paymentStatus: PaymentStatus;
+  status: 'completed' | 'uncompleted';
+  type: 'order';
+  paymentStatus: 'paid' | 'unpaid' | 'partially_paid';
   paidAmount: string;
   remainingAmount: string;
-  paymentDate: string;
-  paymentMethod: PaymentMethod | null;
-  payments: IPaymentTransaction[];
-  statusHistory: IStatusHistoryEntry[];
-  paymentStatusHistory: IPaymentStatusHistoryEntry[];
-  orderId: string;
-  retailerId: string;
-  organizationId: string;
-  order: Order;
-  retailer: IUser;
-  organization: IOrganization;
-  statusChangedAt: string | null;
-  statusChangedBy: string | null;
-  note: string | null;
+  paymentDate?: string;
+  paymentMethod?: string;
+  payments: PaymentDetail[];
+  statusHistory: StatusHistory[];
+  paymentStatusHistory: PaymentStatusHistory[];
+  order: OrderDetail;
+  organization: {
+    id: string;
+    name: string;
+    logoUrl?: string;
+    location?: {
+      lat: number;
+      lng: number;
+      address: string;
+    };
+  };
+  statusChangedAt?: string;
+  statusChangedBy?: string;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+  // Legacy fields for backward compatibility
+  amount?: number;
+  dueDate?: Date;
+  items?: Array<{
+    id: string;
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+  }>;
 }
 
-// Enums
-export enum InvoiceStatus {
-  UNCOMPLETED = 'uncompleted',
-  COMPLETED = 'completed',
-  CANCELLED = 'cancelled',
-}
-
-export enum InvoiceType {
-  ORDER = 'order',
-  REFUND = 'refund',
-  ADJUSTMENT = 'adjustment'
-}
-
-export enum PaymentStatus {
-  UNPAID = 'unpaid',
-  PARTIALLY_PAID = 'partially_paid',
-  PAID = 'paid',
-  OVERPAID = 'overpaid'
-}
-
-export enum PaymentMethod {
-  CASH = 'cash',
-  CARD = 'card',
-  BANK_TRANSFER = 'bank_transfer',
-  CHECK = 'check',
-  MOBILE_PAYMENT = 'mobile_payment',
-  CRYPTO = 'crypto'
-}
-
-// Payment Transaction
-export interface IPaymentTransaction {
+export interface PaymentDetail {
   id: string;
   paymentDate: string;
   paymentAmount: number;
-  paymentMethod: PaymentMethod;
+  paymentMethod: string;
   createdBy: string;
   createdAt: string;
-  note: string | null;
-  createdByUser?: IUser;
+  validationStatus: string;
+  createdByUser?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    role: string;
+  };
+  validatedBy?: string;
+  validatedAt?: string;
+  validatedByUser?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    role: string;
+  };
 }
 
-// Status History
-export interface IStatusHistoryEntry {
+export interface StatusHistory {
   status: string;
   changedAt: string;
   reason: string;
   changedBy?: string;
-  changedByUser?: IUser;
 }
 
-// Payment Status History
-export interface IPaymentStatusHistoryEntry {
+export interface PaymentStatusHistory {
   status: string;
   changedAt: string;
+  reason: string;
   changedBy?: string;
   amount?: number;
-  reason: string;
-  changedByUser?: IUser;
+  changedByUser?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    role: string;
+  };
 }
 
-// Order Types
-
-// API Request/Response Types
-export interface ICreateInvoiceRequest {
-  orderId: string;
+export interface OrderDetail {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  orderReferenceNumber: string;
   retailerId: string;
   organizationId: string;
-  invoiceDate: string;
+  assignedTo: string;
+  createdBy: string;
+  isBackofficeCreated: boolean;
   totalAmount: string;
   subtotalAmount: string;
-  taxAmount: string;
   discountAmount: string;
+  taxAmount: string;
   shippingAmount: string;
-  type: InvoiceType;
+  orderType: string;
+  destination: string;
+  latitude: string;
+  longitude: string;
+  updateReason: string;
+  isUpdated: boolean;
+  status: string;
+  orderDate: string;
+  estimatedDeliveryDate?: string;
+  actualDeliveryDate?: string;
   note?: string;
+  customerInstructions?: string;
+  statusChangedAt: string;
+  statusChangedBy: string;
+  statusHistory: StatusHistory[];
+  deletedAt?: string;
 }
 
-export interface IUpdateInvoiceRequest {
-  status?: InvoiceStatus;
-  paymentStatus?: PaymentStatus;
-  note?: string;
-}
-
-export interface IAddPaymentRequest {
-  paymentAmount: number;
-  paymentMethod: PaymentMethod;
-  note?: string;
-}
-
-export interface IInvoiceListResponse {
-  items: IInvoice[];
+export interface InvoiceResponse {
+  invoices: Invoice[];
   total: number;
   page: number;
-  pageSize: number;
+  size: number;
   totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
 }
 
-export interface IUpdateInvoiceStatusRequest{
-  organizationId: string;
+export interface Payment {
+  id: string;
   invoiceId: string;
-  data: {
-    status: string;
-    reason?: string;
-  }
+  invoiceNumber: string;
+  amount: number;
+  paymentMethod: string;
+  paymentDate: string;
+  validatedBy?: string;
+  validatedAt?: string;
+  validationStatus: string;
+  organization: {
+    id: string;
+    name: string;
+    logoUrl: string;
+  };
+}
+
+export interface PaymentResponse {
+  payments: Payment[];
+  total: number;
+  page: number;
+  size: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export interface InvoiceFilters {
+  paymentStatus?: 'paid' | 'unpaid' | 'partially_paid';
+  organizationId?: string;
+  page?: number;
+  size?: number;
+}
+
+export interface PaymentFilters {
+  organizationId?: string;
+  page?: number;
+  size?: number;
 }

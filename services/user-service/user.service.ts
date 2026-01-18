@@ -9,9 +9,11 @@ import axios from "axios";
 export async function getProfile() {
   const { data: { session } } = await supabase.auth.getSession()
 
-
   try {
-    if (!session?.user) throw new Error('No user on the session!')
+    if (!session?.user) {
+      console.log('No user session found')
+      return null
+    }
 
     const { data, error, status } = await supabase
       .from('users')
@@ -29,13 +31,16 @@ export async function getProfile() {
 
     if (data) {
       return { ...data, phone: !profileError ? profileData?.phone_number : "" }
-
     }
+
+    // Return null if no data found
+    return null
   } catch (error) {
     if (error instanceof Error) {
-      console.log(error.message)
+      console.log('getProfile error:', error.message)
     }
-  } finally {
+    // Return null on error instead of undefined
+    return null
   }
 }
 
@@ -130,6 +135,44 @@ export async function OTPVerification(phone: string, code: string) {
     return response.data
   } catch (error) {
 
+    throw error
+  }
+}
+
+export async function SignupAuthentication(phone: string) {
+  try {
+    const response = await api.post('/auth/retailer/signup/initiate', { phone })
+    return response.data
+  } catch (error) {
+    throw error
+  }
+}
+
+export async function SignupVerification(phone: string, code: string) {
+  try {
+    const response = await api.post('/auth/retailer/signup/verify', { phone, token: code })
+    return response.data
+  } catch (error) {
+    throw error
+  }
+}
+
+export async function updateUserProfile(profileData: {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  profileImageUrl?: string;
+  isOnboarded?: boolean;
+  location?: {
+    lat: number;
+    lng: number;
+    address: string;
+  };
+}) {
+  try {
+    const response = await api.put('/users/profile', profileData)
+    return response.data
+  } catch (error) {
     throw error
   }
 }

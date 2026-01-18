@@ -12,6 +12,9 @@ interface NotificationContextType {
   lastPayload: any;
   triggerRefresh: () => void;
   testInvalidation: () => void;
+  pendingPayment: any;
+  showPaymentModal: (payment: any) => void;
+  hidePaymentModal: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -30,6 +33,7 @@ Notifications.setNotificationHandler({
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [lastPayload, setLastPayload] = useState<any>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [pendingPayment, setPendingPayment] = useState<any>(null);
   const { user } = useAuth();
   const [expoPushToken, setExpoPushToken] = useState<string | undefined>();
   const queryClient = useQueryClient();
@@ -75,6 +79,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }, 100);
     
     console.log('Manual invalidation completed for retailer');
+  };
+
+  // Payment modal functions
+  const showPaymentModal = (payment: any) => {
+    setPendingPayment(payment);
+  };
+
+  const hidePaymentModal = () => {
+    setPendingPayment(null);
   };
 
   // Function to schedule local notification
@@ -243,22 +256,78 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 
               setLastPayload(payload);
               
-              // Show toast for foreground notifications
-              Toast.show({
-                type: 'success',
-                text1: 'Invoice Update!',
-                text2: `Invoice ${newPayload?.invoiceNumber} updated`,
-                position: 'top',
-                visibilityTime: 4000,
-              });
-              
-              // Schedule background notification
-              scheduleLocalNotification(
-                'Invoice Update!',
-                `Invoice ${newPayload?.invoiceNumber} has been updated`
-              );
-              
-              playSound();
+              // Check if this is a payment addition (new payment with pending status)
+              if (newPayload?.payments && Array.isArray(newPayload.payments)) {
+                const pendingPayments = newPayload.payments.filter((payment: any) => 
+                  payment.validationStatus === 'pending'
+                );
+                
+                // If there are pending payments, show the modal for the latest one
+                if (pendingPayments.length > 0) {
+                  const latestPayment = pendingPayments[pendingPayments.length - 1];
+                  console.log('New pending payment detected, showing modal:', latestPayment);
+                  
+                  showPaymentModal({
+                    id: latestPayment.id,
+                    paymentAmount: latestPayment.paymentAmount,
+                    paymentMethod: latestPayment.paymentMethod,
+                    invoiceNumber: newPayload.invoiceNumber,
+                    organizationId: newPayload.organizationId,
+                    invoiceId: newPayload.id
+                  });
+                  
+                  // Show toast for payment notification
+                  Toast.show({
+                    type: 'info',
+                    text1: 'New Payment Notification',
+                    text2: `A new payment requires your validation`,
+                    position: 'top',
+                    visibilityTime: 5000,
+                  });
+                  
+                  // Schedule background notification
+                  scheduleLocalNotification(
+                    'New Payment Notification',
+                    `A new payment requires your validation for invoice ${newPayload.invoiceNumber}`
+                  );
+                  
+                  playSound();
+                } else {
+                  // Regular invoice update
+                  Toast.show({
+                    type: 'success',
+                    text1: 'Invoice Update!',
+                    text2: `Invoice ${newPayload?.invoiceNumber} updated`,
+                    position: 'top',
+                    visibilityTime: 4000,
+                  });
+                  
+                  // Schedule background notification
+                  scheduleLocalNotification(
+                    'Invoice Update!',
+                    `Invoice ${newPayload?.invoiceNumber} has been updated`
+                  );
+                  
+                  playSound();
+                }
+              } else {
+                // Regular invoice update without payments
+                Toast.show({
+                  type: 'success',
+                  text1: 'Invoice Update!',
+                  text2: `Invoice ${newPayload?.invoiceNumber} updated`,
+                  position: 'top',
+                  visibilityTime: 4000,
+                });
+                
+                // Schedule background notification
+                scheduleLocalNotification(
+                  'Invoice Update!',
+                  `Invoice ${newPayload?.invoiceNumber} has been updated`
+                );
+                
+                playSound();
+              }
               
               // Invalidate invoice queries for the specific invoice
               if (newPayload?.organizationId && newPayload?.orderId) {
@@ -322,7 +391,99 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           }
         );
 
-      // Subscribe to both channels with error handling
+      // Add client_relationships channel - listen to client relationship changes filtered by clientId
+      const clientRelationshipsChannel = supabase
+        .channel("client_relationships")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "client_relationships",
+            filter: `retailerId=eq.${user?.id}`,
+          },
+          (payload) => {
+            console.log('=== CLIENT RELATIONSHIP REALTIME UPDATE RECEIVED ===');
+            console.log('Full payload:', payload);
+            console.log('Event type:', payload.eventType);
+            console.log('New data:', payload.new);
+            console.log('Old data:', payload.old);
+            console.log('Client ID filter:', user?.id);
+            
+            const newPayload = payload.new as any;
+            const oldPayload = payload.old as any;
+            
+            // Check if status changed to approved
+            if (payload.eventType === 'UPDATE' && 
+                oldPayload?.status !== 'approved' && 
+                newPayload?.status === 'approved') {
+              
+              console.log('Client relationship approved!');
+              
+              Toast.show({
+                type: 'success',
+                text1: 'Access Granted!',
+                text2: 'You have been approved as a client',
+                position: 'top',
+                visibilityTime: 5000,
+              });
+              
+              // Schedule background notification
+              scheduleLocalNotification(
+                'Access Granted!',
+                'You have been approved as a client and can now access the store'
+              );
+              
+              playSound();
+            }
+            
+            // Check if status changed from approved to something else
+            if (payload.eventType === 'UPDATE' && 
+                oldPayload?.status === 'approved' && 
+                newPayload?.status !== 'approved') {
+              
+              console.log('Client relationship status changed from approved');
+              
+              Toast.show({
+                type: 'warning',
+                text1: 'Access Status Changed',
+                text2: 'Your access status has been updated',
+                position: 'top',
+                visibilityTime: 4000,
+              });
+            }
+            
+            // For new relationships
+            if (payload.eventType === 'INSERT') {
+              console.log('New client relationship created');
+              
+              Toast.show({
+                type: 'info',
+                text1: 'Access Request Sent',
+                text2: 'Your access request has been sent to the organization',
+                position: 'top',
+                visibilityTime: 4000,
+              });
+            }
+            
+            setLastPayload(payload);
+            
+            // Invalidate stores query to refresh the store list with updated statuses
+            queryClient.invalidateQueries({ 
+              queryKey: ['stores'] 
+            });
+            
+            // Force refetch stores after a short delay
+            setTimeout(() => {
+              console.log('Force refetching stores...');
+              queryClient.refetchQueries({ queryKey: ['stores'] });
+            }, 100);
+            
+            triggerRefresh();
+          }
+        );
+
+      // Subscribe to all channels with error handling
       ordersChannel.subscribe((status) => {
         console.log('Orders realtime subscription status (retailer filtered):', status);
         if (status === 'CHANNEL_ERROR') {
@@ -337,10 +498,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }
       });
 
+      clientRelationshipsChannel.subscribe((status) => {
+        console.log('Client relationships realtime subscription status (client filtered):', status);
+        if (status === 'CHANNEL_ERROR') {
+          console.error('Client relationships channel error - check table permissions and clientId filter syntax');
+        }
+      });
+
       return () => {
         console.log('Unsubscribing from realtime channels');
         ordersChannel.unsubscribe();
         invoicesChannel.unsubscribe();
+        clientRelationshipsChannel.unsubscribe();
       };
     };
 
@@ -357,7 +526,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [sound]);
 
   return (
-    <NotificationContext.Provider value={{ lastPayload, triggerRefresh, testInvalidation }}>
+    <NotificationContext.Provider value={{ 
+      lastPayload, 
+      triggerRefresh, 
+      testInvalidation, 
+      pendingPayment, 
+      showPaymentModal, 
+      hidePaymentModal 
+    }}>
       {children}
     </NotificationContext.Provider>
   );

@@ -12,6 +12,7 @@ import {
   Animated,
   Dimensions,
   Platform,
+  ScrollView,
 } from "react-native"
 import { Feather } from "@expo/vector-icons"
 import { useLocalSearchParams, useRouter } from "expo-router"
@@ -20,6 +21,7 @@ import { useTranslation } from "react-i18next"
 import "../../i18n"
 import { safePush } from "../../utils/navigation"
 import { useFetchOrderDetails } from "../../services/order-service/orders.query"
+import Header from "../../components/Header"
 
 const { width } = Dimensions.get("window")
 const HEADER_HEIGHT = 220
@@ -65,7 +67,7 @@ const StatusBadge = ({ status }) => {
     }
   }, [status])
 
-  let bgColor = "#10b981"
+  let bgColor = "#48C6A8"
   let icon = "check-circle"
 
   if (status.toLowerCase() === "pending") {
@@ -77,6 +79,9 @@ const StatusBadge = ({ status }) => {
   } else if (status.toLowerCase() === "processing") {
     bgColor = "#3b82f6"
     icon = "refresh-cw"
+  } else if (status.toLowerCase() === "completed") {
+    bgColor = "#48C6A8"
+    icon = "check-circle"
   }
 
   return (
@@ -99,7 +104,7 @@ const StatusBadge = ({ status }) => {
 const DeliveryStep = ({ type, address, isFirst, isLast }) => {
   const { t } = useTranslation()
   const bgColor = type === "from" ? "#fef3c7" : "#dcfce7"
-  const iconColor = type === "from" ? "#f59e0b" : "#10b981"
+  const iconColor = type === "from" ? "#f59e0b" : "#48C6A8"
 
   return (
     <View style={styles.deliveryStep}>
@@ -138,7 +143,7 @@ const OrderItem = ({ item, isLast }) => {
       case 'validated':
         return { 
           backgroundColor: '#dcfce7', 
-          color: '#16a34a',
+          color: '#48C6A8',
           icon: 'check-circle'
         }
       case 'quantity_updated':
@@ -156,7 +161,7 @@ const OrderItem = ({ item, isLast }) => {
       case 'delivered':
         return { 
           backgroundColor: '#dcfce7', 
-          color: '#16a34a',
+          color: '#48C6A8',
           icon: 'truck'
         }
       case 'returned':
@@ -252,8 +257,8 @@ export default function OrderDetailsScreen() {
     });
   }, [orderDetails, isLoading, error, extractedOrderId, extractedOrgId]);
   
-  const [clientAddress, setClientAddress] = useState("Loading...")
-  const [storeAddress, setStoreAddress] = useState("Loading...")
+  const [clientAddress, setClientAddress] = useState(t("Loading..."))
+  const [storeAddress, setStoreAddress] = useState(t("Loading..."))
   const scrollY = useRef(new Animated.Value(0)).current
   const fadeAnim = useRef(new Animated.Value(0)).current
 
@@ -284,10 +289,10 @@ export default function OrderDetailsScreen() {
           const addr = await getAddressFromCoords(orderDetails.organization?.location?.lat, orderDetails.organization?.location?.lng)
           setStoreAddress(addr)
         } else {
-          setStoreAddress("Store address not available")
+          setStoreAddress(t("Store address not available"))
         }
       } catch (error) {
-        setStoreAddress("Store address not available")
+        setStoreAddress(t("Store address not available"))
       }
     }
 
@@ -304,7 +309,7 @@ export default function OrderDetailsScreen() {
         <Text style={{ fontSize: 18, color: '#666' }}>Missing order information</Text>
         <TouchableOpacity 
           onPress={() => router.back()}
-          style={{ marginTop: 20, backgroundColor: '#10b981', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
+          style={{ marginTop: 20, backgroundColor: '#48C6A8', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
         >
           <Text style={{ color: 'white', fontWeight: '600' }}>Go Back</Text>
         </TouchableOpacity>
@@ -329,7 +334,7 @@ export default function OrderDetailsScreen() {
         <Text style={{ fontSize: 14, color: '#999', marginTop: 8 }}>{error?.message || 'An error occurred'}</Text>
         <TouchableOpacity 
           onPress={() => router.back()}
-          style={{ marginTop: 20, backgroundColor: '#10b981', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
+          style={{ marginTop: 20, backgroundColor: '#48C6A8', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
         >
           <Text style={{ color: 'white', fontWeight: '600' }}>Go Back</Text>
         </TouchableOpacity>
@@ -385,59 +390,36 @@ export default function OrderDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="white" />
+      <StatusBar barStyle="light-content" backgroundColor="#1A2A4F" />
+      <Header title={t("Order Details")} />
 
       <Animated.View style={[styles.mainContainer, { opacity: fadeAnim }]}>
-        {/* Animated Header */}
-        <Animated.View style={[styles.header, { height: headerHeight }]}>
-          <LinearGradient
-            colors={["#10b981", "#059669"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
-          />
-
-          <TouchableOpacity className="mt-2" style={styles.backBtn} onPress={() => safePush({pathname: `/(app)/orders`})} activeOpacity={0.7}>
-            <Feather name="arrow-left" size={24} color="#fff" />
-          </TouchableOpacity>
-
-          <Animated.View
-            style={[
-              styles.headerContent,
-              {
-                opacity: headerOpacity,
-                transform: [{ scale: imageScale }],
-              },
-            ]}
-          >
+        {/* Store Header Card */}
+        <View style={styles.storeHeaderCard}>
+          <View style={styles.storeHeaderContent}>
             <Image
               source={{
                 uri: orderDetails?.organization?.logoUrl || "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
               }}
-              style={styles.headerImage}
+              style={styles.storeHeaderImage}
             />  
-            <Text style={styles.headerTitle}>{orderDetails.organization?.name || "Store"}</Text>
-            <StatusBadge status={orderDetails.status} />
-          </Animated.View>
+            <View style={styles.storeHeaderInfo}>
+              <Text style={styles.storeHeaderTitle}>{orderDetails.organization?.name || "Store"}</Text>
+              <StatusBadge status={orderDetails.status} />
+            </View>
+          </View>
+        </View>
 
-          <Animated.View style={[styles.compactHeader, { opacity: titleOpacity }]}>
-            <Text className="mb-2 mr-4" style={styles.compactTitle}>{t("Order")} #{orderDetails.id.substring(0, 8)}</Text>
-            <StatusBadge status={orderDetails.status} />
-          </Animated.View>
-        </Animated.View>
-
-        <Animated.ScrollView
+        <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
-          scrollEventThrottle={16}
         >
           {/* Order Info Card */}
           <View style={styles.card}>
             <View style={styles.orderInfoHeader}>
               <View style={styles.orderDateContainer}>
-                <Feather name="calendar" size={18} color="#059669" style={{ marginRight: 8 }} />
+                <Feather name="calendar" size={18} color="#48C6A8" style={{ marginRight: 8 }} />
                 <Text style={styles.orderDate}>
                   {formattedDate} • {formattedTime}
                 </Text>
@@ -473,7 +455,7 @@ export default function OrderDetailsScreen() {
                     activeOpacity={0.7}
                   >
                     <Text style={styles.storeButtonText}>{t("Visit store")}</Text>
-                    <Feather name="chevron-right" size={16} color="#059669" />
+                    <Feather name="chevron-right" size={16} color="#48C6A8" />
                   </TouchableOpacity>
                   
                   {orderDetails.status === 'completed' && (
@@ -485,7 +467,7 @@ export default function OrderDetailsScreen() {
                       activeOpacity={0.7}
                     >
                       <Text style={styles.invoiceButtonText}>{t("View Invoice")}</Text>
-                      <Feather name="file-text" size={16} color="#059669" />
+                      <Feather name="file-text" size={16} color="#48C6A8" />
                     </TouchableOpacity>
                   )}
                 </View>
@@ -497,7 +479,7 @@ export default function OrderDetailsScreen() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleContainer}>
-                <Feather name="shopping-bag" size={20} color="#059669" style={{ marginRight: 10 }} />
+                <Feather name="shopping-bag" size={20} color="#48C6A8" style={{ marginRight: 10 }} />
                 <Text style={styles.cardTitle}>{t("Order Items")}</Text>
               </View>
               <View style={styles.itemCountBadge}>
@@ -515,7 +497,7 @@ export default function OrderDetailsScreen() {
           {/* Delivery Details Card */}
           <View style={styles.card}>
             <View style={styles.cardTitleContainer}>
-              <Feather name="map" size={20} color="#059669" style={{ marginRight: 10 }} />
+              <Feather name="map" size={20} color="#48C6A8" style={{ marginRight: 10 }} />
               <Text style={styles.cardTitle}>{t("Delivery Details")}</Text>
             </View>
 
@@ -534,7 +516,7 @@ export default function OrderDetailsScreen() {
           {/* Payment Summary Card */}
           <View style={styles.card}>
             <View style={styles.cardTitleContainer}>
-              <Feather name="credit-card" size={20} color="#059669" style={{ marginRight: 10 }} />
+              <Feather name="credit-card" size={20} color="#48C6A8" style={{ marginRight: 10 }} />
               <Text style={styles.cardTitle}>{t("Payment Summary")}</Text>
             </View>
 
@@ -577,7 +559,7 @@ export default function OrderDetailsScreen() {
             <Feather name="help-circle" size={18} color="#6b7280" style={{ marginRight: 8 }} />
             <Text style={styles.supportButtonText}>{t("Need help with this order?")}</Text>
           </TouchableOpacity>
-        </Animated.ScrollView>
+        </ScrollView>
       </Animated.View>
     </SafeAreaView>
   )
@@ -586,10 +568,43 @@ export default function OrderDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "#f8fafc",
   },
   mainContainer: {
     flex: 1,
+  },
+  storeHeaderCard: {
+    backgroundColor: "white",
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  storeHeaderContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  storeHeaderImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 16,
+    borderWidth: 2,
+    borderColor: "#e5e7eb",
+  },
+  storeHeaderInfo: {
+    flex: 1,
+  },
+  storeHeaderTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#111827",
+    marginBottom: 8,
   },
   header: {
     height: HEADER_HEIGHT,
@@ -656,10 +671,8 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    marginTop: COMPACT_HEADER_HEIGHT,
   },
   scrollContent: {
-    paddingTop: HEADER_HEIGHT - COMPACT_HEADER_HEIGHT + 10,
     paddingBottom: 30,
     paddingHorizontal: 16,
   },
@@ -697,7 +710,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   itemCountText: {
-    color: "#059669",
+    color: "#48C6A8",
     fontWeight: "600",
     fontSize: 12,
   },
@@ -753,7 +766,7 @@ const styles = StyleSheet.create({
   },
   storeButtonText: {
     fontSize: 14,
-    color: "#059669",
+    color: "#48C6A8",
     fontWeight: "600",
     marginRight: 4,
   },
@@ -763,7 +776,7 @@ const styles = StyleSheet.create({
   },
   invoiceButtonText: {
     fontSize: 14,
-    color: "#f59e0b",
+    color: "#48C6A8",
     fontWeight: "600",
     marginRight: 4,
   },
@@ -802,7 +815,7 @@ const styles = StyleSheet.create({
   quantityText: {
     fontWeight: "400",
     fontSize: 12,
-    color: "#059669",
+    color: "#48C6A8",
   },
   orderItemDetails: {
     flex: 1,
@@ -897,7 +910,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#059669",
+    backgroundColor: "#48C6A8",
     position: "absolute",
     top: "50%",
     marginTop: -3,
@@ -942,7 +955,7 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#059669",
+    color: "#48C6A8",
   },
   paymentMethod: {
     flexDirection: "row",
@@ -957,14 +970,14 @@ const styles = StyleSheet.create({
     color: "#6b7280",
   },
   reorderButton: {
-    backgroundColor: "#059669",
+    backgroundColor: "#48C6A8",
     borderRadius: 16,
     paddingVertical: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
-    shadowColor: "#059669",
+    shadowColor: "#48C6A8",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
